@@ -12,11 +12,11 @@ mkdir -p 138x138_png
 
 for f in *.svg; do
   OUTPUTFILE="18x18_png/18x18_${f%.*}.png";
-  convert $f -background "$BACKGROUND_COL" -fill "$BACKGROUND_COL" -flatten +opaque black -alpha remove -resize 18x18 -strip $OUTPUTFILE
+  convert $f -background "$BACKGROUND_COL" -fill "$BACKGROUND_COL" -flatten -alpha remove -resize 18x18 -strip $OUTPUTFILE
   OUTPUTFILE="22x22_png/22x22_${f%.*}.png";
   convert $f -background "$BACKGROUND_COL" -fill "$BACKGROUND_COL" -flatten +opaque black -alpha remove -resize 22x22 -strip $OUTPUTFILE
   OUTPUTFILE="46x46_png/46x46_${f%.*}.png";
-  convert $f -background "$BACKGROUND_COL" -fill "$BACKGROUND_COL" -flatten +opaque black -alpha remove -resize 46x46 -strip $OUTPUTFILE
+  convert $f -background "$BACKGROUND_COL" -fill "$BACKGROUND_COL" -flatten -alpha remove -resize 46x46 -strip $OUTPUTFILE
   OUTPUTFILE="55x55_png/55x55_${f%.*}.png";
   convert $f -background "$BACKGROUND_COL" -fill "$BACKGROUND_COL" -flatten +opaque black -alpha remove -resize 55x55 -strip $OUTPUTFILE
   OUTPUTFILE="138x138_png/138x138_${f%.*}.png";
