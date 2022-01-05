@@ -1,5 +1,8 @@
 #include "wificreds.h"
+#include "weatherMapping.h"
+#include "weatherApiKey.h"
 #include <WiFi.h>
+#include <HTTPClient.h>
 #include <WebServer.h>
 #include <SPIFFS.h>
 #include <ESPmDNS.h>
@@ -7,6 +10,15 @@
 #include <ArduinoOTA.h>
 #include <ESP32Servo.h>
 #include <ESPNexUpload.h>
+#include <ArduinoJson.h>
+#include <NTPClient.h>
+
+// WARNING:  If you read this code your head will explode and you will embrace the heat death of the universe as a welcome relief.
+// I have made zero attempt to make it good.  It's just cobbled together until it sort of works. 
+// I will fix it one day, probably.
+
+
+
 
 /*
 Create a file called wificreds.h like this:
@@ -29,14 +41,21 @@ and adapt it to my needs.  It looks a lot cleaner.
 */
 const char* host = "nextion";
 unsigned long previousMillis = 0;
+unsigned long threehourmillis = 0;
 
-
-// NexUploader stuff #####
-
+// NexUploader stuff
 int fileSize  = 0;
 bool result   = true;
-ESPNexUpload nextion(115200);
+//ESPNexUpload nextion(115200);
 WebServer server(80);
+
+// Time stuff
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "time"); //, utcOffsetInSeconds);
+
+// HTTP Client Stuff
+WiFiClient wificlient;
+HTTPClient http;
 
 String getContentType(String filename){
   if(server.hasArg(F("download"))) return F("application/octet-stream");
@@ -77,6 +96,8 @@ bool handleFileRead(String path) {                          // send the right fi
 
 // handle the file uploads
 bool handleFileUpload(){
+  //Serial2.end();
+  ESPNexUpload nextion(115200);
   HTTPUpload& upload = server.upload();
 
   // Check if file seems valid nextion tft file
@@ -91,7 +112,6 @@ bool handleFileUpload(){
     server.send(303);
     return false;
   }
-
 
   if(upload.status == UPLOAD_FILE_START){
 
@@ -124,19 +144,367 @@ bool handleFileUpload(){
   }else if(upload.status == UPLOAD_FILE_END){
 
     // End the serial connection to the Nextion and softrest it
+    
+    //  This uploader code is bad.
+    //  I moved the ESPNexUpload in to this function instead of global
+    //  and it mostly works, but then craps out at the end.  I think
+    //  that the upload to the ESP32 has finished, but it hasn't finished
+    //  writing over the serial to the screen.  Try and hack this with a
+    // delay
+
+    //delay(15000);
     nextion.end();
     
     Serial.println("");
     //Serial.println(nextion.statusMessage);
+    //Serial2.begin(115200, SERIAL_8N1, 17,16);
     return true;
   }
 return false;
 }
 // End Uploader stuff #######################
 
+bool writeNxt(std::string data) {
+  byte terminator[3] = {255,255,255};
+  Serial2.write(data.c_str());
+  Serial2.write(terminator,3);
+  return true;
+}
+
+std::string dayNameShort(unsigned int y, unsigned int m, unsigned int d) {
+  std::string day[] = {
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat",
+    "Sun",
+    "Mon",
+    "Tue"
+  };  
+  m = (m + 9) % 12;
+  y -= m / 10;
+  unsigned long dn = 365*y + y/4 - y/100 + y/400 + (m*306 + 5)/10 + (d-1);
+  return day[dn % 7];
+}
+
+
+void doWeather() {
+  // Every three hours we should update ourselves
+  // We need a lot of space for the JSON, so do it all in here and then throw it all away
+  //std::string weatherLocation = "353363";
+  
+  // Make the weather man appear
+  writeNxt("page 0");
+  writeNxt("vis 255,0");
+  writeNxt("vis michaelfish,1");
+  //writeNxt("ref michaelfish");
+  delay(500);
+
+  std::string url = "http://datapoint.metoffice.gov.uk/public/data/val/wxfcs/all/json/";
+  url += "353363";
+  url += "?res=daily&key=";
+  url += metApiKey;
+
+  http.useHTTP10(true);
+  http.begin(wificlient, url.c_str());
+  http.GET();
+  DynamicJsonDocument doc(6144);
+  DeserializationError error = deserializeJson(doc, http.getStream());
+  http.end();
+  
+  if (error) {
+    Serial.print("deserializeJson() failed: ");
+    Serial.println(error.c_str());
+    return;
+  };
+
+  int count = 0;
+  
+  JsonObject SiteRep_DV = doc["SiteRep"]["DV"];
+  JsonObject SiteRep_DV_Location = SiteRep_DV["Location"];
+  
+  for (JsonObject SiteRep_DV_Location_Period_item : SiteRep_DV_Location["Period"].as<JsonArray>()) {
+    if (count > 7) break; // We only have 8 slots, and zero is the big picture.
+
+    const char* date0 = SiteRep_DV_Location_Period_item["value"];
+    String date = String(date0); // 2022-01-07Z
+    date.remove(date.length()-1,1); // Strip Z
+    int yyyy = date.substring(0,date.indexOf("-")).toInt();
+    int mm = date.substring(date.indexOf("-")+1,date.lastIndexOf("-")).toInt();
+    int dd = date.substring(date.lastIndexOf("-")+1).toInt();
+    std::string dayshort = dayNameShort(yyyy,mm,dd);
+
+    JsonObject SiteRep_DV_Location_Period_item_Rep_0 = SiteRep_DV_Location_Period_item["Rep"][0];
+    const char* windDirDay = SiteRep_DV_Location_Period_item_Rep_0["D"];
+    const char* maxWindSpeedDay = SiteRep_DV_Location_Period_item_Rep_0["Gn"];
+    int maxWindSpeedDayInt = atoi(maxWindSpeedDay);
+    //const char* humidNoon0 = SiteRep_DV_Location_Period_item_Rep_0["Hn"];
+    const char* rainChanceDay = SiteRep_DV_Location_Period_item_Rep_0["PPd"];
+    int rainChanceDayInt = atoi(rainChanceDay);
+    const char* windSpeedDay = SiteRep_DV_Location_Period_item_Rep_0["S"];
+    int windSpeedDayInt = atoi(windSpeedDay);
+    //const char* vis0 = SiteRep_DV_Location_Period_item_Rep_0["V"];
+    const char* dayMaxTemp = SiteRep_DV_Location_Period_item_Rep_0["Dm"];
+    int dayMaxTempInt = atoi(dayMaxTemp);
+    //const char* feelsLikeDayMax0 = SiteRep_DV_Location_Period_item_Rep_0["FDm"];
+    const char* dayWeatherType = SiteRep_DV_Location_Period_item_Rep_0["W"];
+    const char* uvIndexDay = SiteRep_DV_Location_Period_item_Rep_0["U"];
+    int uvIndexDayInt = atoi(uvIndexDay);
+    const char* timePeriodDay = SiteRep_DV_Location_Period_item_Rep_0["$"];
+ 
+    JsonObject SiteRep_DV_Location_Period_item_Rep_1 = SiteRep_DV_Location_Period_item["Rep"][1];
+    const char* windDirNight = SiteRep_DV_Location_Period_item_Rep_1["D"];
+    const char* maxWindSpeedNight = SiteRep_DV_Location_Period_item_Rep_1["Gm"];
+    int maxWindSpeedNightInt = atoi(maxWindSpeedNight);
+    //const char* SiteRep_DV_Location_Period_item_Rep_1_Hm = SiteRep_DV_Location_Period_item_Rep_1["Hm"];
+    const char* rainChanceNight = SiteRep_DV_Location_Period_item_Rep_1["PPn"];
+    int rainChanceNightInt = atoi(rainChanceNight);
+    const char* windSpeedNight = SiteRep_DV_Location_Period_item_Rep_1["S"];
+    //const char* SiteRep_DV_Location_Period_item_Rep_1_V = SiteRep_DV_Location_Period_item_Rep_1["V"];
+    const char* nightMinTemp = SiteRep_DV_Location_Period_item_Rep_1["Nm"];
+    int nightMinTempInt = atoi(nightMinTemp);
+    //const char* SiteRep_DV_Location_Period_item_Rep_1_FNm = SiteRep_DV_Location_Period_item_Rep_1["FNm"];
+    const char* nightWeatherType = SiteRep_DV_Location_Period_item_Rep_1["W"];
+    const char* timePeriodNight = SiteRep_DV_Location_Period_item_Rep_1["$"];
+
+    if (count == 0) {
+      // First loop we update the main weather
+      if (timeClient.getHours() > 16) {
+        // it's already night, so let's skip straight to the night forecast
+        byte weatherPic = WEATHER_CODES_LARGE[atoi(nightWeatherType)];
+        std::string weatherPicStr = std::to_string(weatherPic);
+        std::string command = "p8.pic="+weatherPicStr;
+        writeNxt(command.c_str());
+        count=1;
+        writeNxt("vis p8,1");
+
+        int pos = 38;        
+        if (maxWindSpeedNightInt > 20) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(98);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        };
+        if (nightMinTempInt < 5) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(96);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        }
+        if (rainChanceNightInt > 60) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(97);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        }
+      } else {
+        byte weatherPic = WEATHER_CODES_LARGE[atoi(dayWeatherType)];
+        byte weatherPicSm = WEATHER_CODES_SMALL[atoi(nightWeatherType)];
+        std::string weatherPicStr = std::to_string(weatherPic);
+        std::string command = "p8.pic="+weatherPicStr;
+        writeNxt(command);
+        int pos = 38;        
+        if (maxWindSpeedDayInt > 20) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(98);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        };
+        if (dayMaxTempInt < 5) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(96);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        }
+        if (rainChanceDayInt > 60) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(97);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        }
+
+        if (uvIndexDayInt > 5) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(95);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        }  
+
+        weatherPicStr = std::to_string(weatherPicSm);
+        command = "p1.pic="+weatherPicStr;
+        writeNxt(command.c_str());
+        writeNxt("vis p1,1");
+        std::string dayAndTemperatureS = dayshort+": "+nightMinTemp;//+"°";
+        dayAndTemperatureS += "\xB0";
+        //std::string textId = std::to_string(count+4)
+        command = "t4.txt=\""+dayAndTemperatureS+"\"";
+        writeNxt(command.c_str());
+        pos = 9;
+        if (maxWindSpeedNightInt > 20) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(91);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        };
+        if (nightMinTempInt < 5) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(89);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        }
+        if (rainChanceNightInt > 60) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(90);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        }
+
+        count=2;
+        writeNxt("vis p8,1");
+        writeNxt("vis t4,1");
+      }
+      delay(1000);
+      continue;
+    } else {
+      // This should be the next time we come in to the loop.  We will have either
+      // updated the big picture and the first little one, or just the big one.
+      // `count` should tell us where we got to.
+      byte weatherPicDay = WEATHER_CODES_SMALL[atoi(dayWeatherType)];
+      byte weatherPicNight = WEATHER_CODES_SMALL[atoi(nightWeatherType)];
+      std::string weatherPicDayS    = std::to_string(weatherPicDay);
+      std::string weatherPicNightS  = std::to_string(weatherPicNight);
+      std::string dayid = std::to_string(count);
+      std::string nightid = std::to_string(count+1);
+      std::string dayCommand = "p"+dayid+".pic="+weatherPicDayS;
+      std::string nightCommand = "p"+nightid+".pic="+weatherPicNightS;
+      writeNxt(dayCommand.c_str());
+      std::string visDCmd = "vis p" + dayid + ",1";
+      std::string visNCmd = "vis p" + nightid + ",1";
+      writeNxt(visDCmd);
+
+      // Deal with day temperatures
+      int t = atoi(dayMaxTemp);
+      std::string dayAndTemperatureS = dayshort+": " + std::to_string(t);
+      dayAndTemperatureS += "\xB0"; // °
+      std::string textId = std::to_string(count+3);
+      std::string command = "t"+textId+".txt=\""+dayAndTemperatureS+"\"";
+      writeNxt(command.c_str());
+      writeNxt("vis t"+textId+",1");
+      int pos = count * 4 + 5;
+      if (maxWindSpeedDayInt > 20) {
+        std::string pid = "p" + std::to_string(pos);
+        std::string pc = pid + ".pic=";
+        pc += std::to_string(91);
+        writeNxt(pc);
+        writeNxt("vis "+pid+",1");
+        pos += 1;
+      };
+      if (dayMaxTempInt < 5) {
+        std::string pid = "p" + std::to_string(pos);
+        std::string pc = pid + ".pic=";
+        pc += std::to_string(89);
+        writeNxt(pc);
+        writeNxt("vis "+pid+",1");
+        pos += 1;
+      }
+      if (rainChanceDayInt > 60) {
+        std::string pid = "p" + std::to_string(pos);
+        std::string pc = pid + ".pic=";
+        pc += std::to_string(90);
+        writeNxt(pc);
+        writeNxt("vis "+pid+",1");
+        pos += 1;
+      }
+      if (uvIndexDayInt > 5) {
+        std::string pid = "p" + std::to_string(pos);
+        std::string pc = pid + ".pic=";
+        pc += std::to_string(95);
+        writeNxt(pc);
+        writeNxt("vis "+pid+",1");
+        pos += 1;
+      } 
+      
+      delay(1000);
+      pos = count * 4 + 9;
+
+      // Deal with night temperatures
+      t = atoi(nightMinTemp);
+      dayAndTemperatureS = dayshort+": " + std::to_string(t);
+      dayAndTemperatureS += "\xB0";
+      textId = std::to_string(count+4);
+      command = "t"+textId+".txt=\""+dayAndTemperatureS+"\"";
+      if (count < 7 ) {
+        writeNxt(nightCommand.c_str()); // Skip the last one if we'd overflow
+        writeNxt(visNCmd);
+        writeNxt(command.c_str()); // Skip the last one if we'd overflow
+        writeNxt("vis t"+textId+",1");
+        if (maxWindSpeedNightInt > 20) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(91);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        };
+        if (nightMinTempInt < 5) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(89);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        }
+        if (rainChanceNightInt > 60) {
+          std::string pid = "p" + std::to_string(pos);
+          std::string pc = pid + ".pic=";
+          pc += std::to_string(90);
+          writeNxt(pc);
+          writeNxt("vis "+pid+",1");
+          pos += 1;
+        }
+      };
+
+      delay(1000);
+      count+=2;
+    }
+  } 
+  
+  // Make the weather man vanish
+  writeNxt("vis michaelfish,0");
+  writeNxt("vis t1,1");
+  writeNxt("vis n0,1");
+  writeNxt("vis t3,1");
+  writeNxt("vis t2,1");
+  writeNxt("vis p37,1");
+  writeNxt("vis p0,1");
+  writeNxt("vis n1,1");
+  writeNxt("vis t0,1");
+
+}
 
 void setup() {
   Serial.begin(115200);
+  Serial2.begin(115200, SERIAL_8N1, 17,16);
   Serial.println("Booting");
   WiFi.mode(WIFI_STA);
   WiFi.begin(STASSID, STAPSK);
@@ -168,6 +536,7 @@ void setup() {
         type = "filesystem";
 
       // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+      SPIFFS.end();
       Serial.println("Start updating " + type);
     })
     .onEnd([]() {
@@ -214,7 +583,7 @@ MDNS.begin(host);
   //SERVER INIT
   server.on("/", HTTP_POST, [](){ 
 
-    Serial.println(F("Succesfully updated Nextion!\n"));
+    Serial.println(F("Successfully updated Nextion!\n"));
     // Redirect the client to the success page after handeling the file upload
     server.sendHeader(F("Location"),F("/success.html"));
     server.send(303);
@@ -239,18 +608,48 @@ MDNS.begin(host);
 
 
   server.begin();
-  Serial.println(F("\nHTTP server started"));
+  Serial.println(F("\nHTTP server started"));    
 
-
-    
+  // NTP
+  timeClient.begin();
+  timeClient.update();
+  while (!timeClient.isTimeSet()) {
+    tone(21,4186,100);
+    delay(1000);
+  };
+  writeNxt("page 0");
+  writeNxt("vis michaelfish,0");
+  doWeather();
 }
+
+byte pic = 2;
 
 void loop() {
   ArduinoOTA.handle();
+  timeClient.update();  // Has it's own rate limiter, so call with abandon
+  server.handleClient();
+
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= 2500) {
     previousMillis = millis();
     //tone(21,4186, 100);
+    // std::string cmd = "page0.p8.pic=";
+    // cmd += std::to_string(pic);
+    // writeNxt(cmd);
+    // if (pic == 2) {
+    //   pic = 3;
+    // } else {
+    //   pic =2;
+    // }
   }
-    server.handleClient();
+
+  if (currentMillis - threehourmillis >= 10800000){
+    threehourmillis = millis();
+    doWeather();
+  }
+
+  if(Serial2.available()) {
+    Serial.write(".");
+    Serial.write(Serial2.read());
+  }
 }
