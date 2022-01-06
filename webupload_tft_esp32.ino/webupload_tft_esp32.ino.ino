@@ -9,16 +9,14 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <ESP32Servo.h>
-#include <ESPNexUpload.h>
 #include <ArduinoJson.h>
 #include <NTPClient.h>
+#include "ESPNexUpload.h"
+#include <BluetoothSerial.h>
 
 // WARNING:  If you read this code your head will explode and you will embrace the heat death of the universe as a welcome relief.
 // I have made zero attempt to make it good.  It's just cobbled together until it sort of works. 
 // I will fix it one day, probably.
-
-
-
 
 /*
 Create a file called wificreds.h like this:
@@ -35,18 +33,25 @@ line 47 & 48 and swap the "16" and the "17".
 #define NEXT_RX 17 // Default in the library are the wrong way around
 #define NEXT_TX 16
 
-I don't like that library and I will replace it with either something I 
-cobble together, or use https://github.com/esphome/esphome/blob/dev/esphome/components/nextion/nextion.cpp
-and adapt it to my needs.  It looks a lot cleaner.
+Or I've included a hacked up version in github.  I was going to make changes to it, but haven't done yet.
+Once an upload is complete you have to reboot everything for now.
 */
+
 const char* host = "nextion";
 unsigned long previousMillis = 0;
-unsigned long threehourmillis = 0;
+unsigned long hourmillis = 0;
+
+const byte key1   = 14;
+const byte key2   = 27;
+const byte relay1 = 22;
+const byte relay2 = 19;
+const byte ntc    = 38;
+
 
 // NexUploader stuff
 int fileSize  = 0;
 bool result   = true;
-//ESPNexUpload nextion(115200);
+ESPNexUpload nextion(115200);
 WebServer server(80);
 
 // Time stuff
@@ -57,26 +62,19 @@ NTPClient timeClient(ntpUDP, "time"); //, utcOffsetInSeconds);
 WiFiClient wificlient;
 HTTPClient http;
 
+// Serial Bluetooth
+BluetoothSerial SerialBT;
+
+
 String getContentType(String filename){
   if(server.hasArg(F("download"))) return F("application/octet-stream");
-  else if(filename.endsWith(F(".htm"))) return F("text/html");
   else if(filename.endsWith(".html")) return F("text/html");
-  else if(filename.endsWith(F(".css"))) return F("text/css");
-  else if(filename.endsWith(F(".js"))) return F("application/javascript");
-  else if(filename.endsWith(F(".png"))) return F("image/png");
-  else if(filename.endsWith(F(".gif"))) return F("image/gif");
-  else if(filename.endsWith(F(".jpg"))) return F("image/jpeg");
-  else if(filename.endsWith(F(".ico"))) return F("image/x-icon");
-  else if(filename.endsWith(F(".xml"))) return F("text/xml");
-  else if(filename.endsWith(F(".pdf"))) return F("application/x-pdf");
-  else if(filename.endsWith(F(".zip"))) return F("application/x-zip");
   else if(filename.endsWith(F(".gz"))) return F("application/x-gzip");
   return F("text/plain");
 }
 
 
 bool handleFileRead(String path) {                          // send the right file to the client (if it exists)
-  Serial.print("handleFileRead: " + path);
   if (path.endsWith("/")) path += "index.html";             // If a folder is requested, send the index file
   String contentType = getContentType(path);                // Get the MIME type
   String pathWithGz = path + ".gz";
@@ -86,18 +84,14 @@ bool handleFileRead(String path) {                          // send the right fi
     File file = SPIFFS.open(path, "r");                     // Open the file
     size_t sent = server.streamFile(file, contentType);     // Send it to the client
     file.close();                                           // Close the file again
-    Serial.println(String("\tSent file: ") + path);
     return true;
   }
-  Serial.println(String("\tFile Not Found: ") + path);      // If the file doesn't exist, return false
   return false;
 }
 
 
 // handle the file uploads
 bool handleFileUpload(){
-  //Serial2.end();
-  ESPNexUpload nextion(115200);
   HTTPUpload& upload = server.upload();
 
   // Check if file seems valid nextion tft file
@@ -114,50 +108,13 @@ bool handleFileUpload(){
   }
 
   if(upload.status == UPLOAD_FILE_START){
-
-    Serial.println(F("\nFile received. Update Nextion..."));
-
-    // Prepare the Nextion display by seting up serial and telling it the file size to expect
+    SerialBT.println(F("\nFile received. Update Nextion..."));
     result = nextion.prepareUpload(fileSize);
-    
-    if(result){
-      Serial.print(F("Start upload. File size is: "));
-      Serial.print(fileSize);
-      Serial.println(F(" bytes"));
-    }else{
-      Serial.println(nextion.statusMessage + "\n");
-      return false;
-    }
-    
-  }else if(upload.status == UPLOAD_FILE_WRITE){
-
-    // Write the received bytes to the nextion
-    result = nextion.upload(upload.buf, upload.currentSize);
-    
-    if(result){
-      Serial.print(F("."));
-    }else{
-      Serial.println(nextion.statusMessage + "\n");
-      return false;
-    }
-  
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    nextion.upload(upload.buf, upload.currentSize);  
   }else if(upload.status == UPLOAD_FILE_END){
-
-    // End the serial connection to the Nextion and softrest it
-    
-    //  This uploader code is bad.
-    //  I moved the ESPNexUpload in to this function instead of global
-    //  and it mostly works, but then craps out at the end.  I think
-    //  that the upload to the ESP32 has finished, but it hasn't finished
-    //  writing over the serial to the screen.  Try and hack this with a
-    // delay
-
-    //delay(15000);
+    delay(5000);
     nextion.end();
-    
-    Serial.println("");
-    //Serial.println(nextion.statusMessage);
-    //Serial2.begin(115200, SERIAL_8N1, 17,16);
     return true;
   }
 return false;
@@ -171,7 +128,7 @@ bool writeNxt(std::string data) {
   return true;
 }
 
-std::string dayNameShort(unsigned int y, unsigned int m, unsigned int d) {
+std::string dateToDayName(unsigned int y, unsigned int m, unsigned int d) {
   std::string day[] = {
     "Wed",
     "Thu",
@@ -213,8 +170,8 @@ void doWeather() {
   http.end();
   
   if (error) {
-    Serial.print("deserializeJson() failed: ");
-    Serial.println(error.c_str());
+    SerialBT.print("deserializeJson() failed: ");
+    SerialBT.println(error.c_str());
     return;
   };
 
@@ -232,7 +189,7 @@ void doWeather() {
     int yyyy = date.substring(0,date.indexOf("-")).toInt();
     int mm = date.substring(date.indexOf("-")+1,date.lastIndexOf("-")).toInt();
     int dd = date.substring(date.lastIndexOf("-")+1).toInt();
-    std::string dayshort = dayNameShort(yyyy,mm,dd);
+    std::string dayshort = dateToDayName(yyyy,mm,dd);
 
     JsonObject SiteRep_DV_Location_Period_item_Rep_0 = SiteRep_DV_Location_Period_item["Rep"][0];
     const char* windDirDay = SiteRep_DV_Location_Period_item_Rep_0["D"];
@@ -499,33 +456,92 @@ void doWeather() {
   writeNxt("vis p0,1");
   writeNxt("vis n1,1");
   writeNxt("vis t0,1");
-
 }
+
+void updateSwitchStatus(std::string control, std::string picElement) {
+    byte relay = (control == "hw") ? relay1 : relay2;
+    StaticJsonDocument<64> doc;
+    wificlient.setTimeout(5000);
+    http.useHTTP10(true);
+    std::string url = "http://piwarmer.whizzy.org/get/" + control;
+    http.begin(wificlient, url.c_str());
+    int returnCode = http.GET();
+    if (returnCode == 200) {
+      DeserializationError error = deserializeJson(doc, http.getStream());
+      if (error) {
+        SerialBT.print("Deserialisation Err: ");
+        SerialBT.println(error.c_str());
+      } else {
+        bool state = doc["state"];
+        //SerialBT.print("State:");
+        //SerialBT.println(state);
+        if (state) {
+          std::string command = picElement + ".pic=93";
+          writeNxt(command);
+          digitalWrite(relay, HIGH);
+        } else {
+          std::string command = picElement + ".pic=94";
+          writeNxt(command);
+          digitalWrite(relay, LOW);
+        }
+      }
+    } else {
+      SerialBT.print("Return code: ");
+      SerialBT.println(returnCode);
+    };
+    http.end();
+};
+
+void doButtonPress() {  
+  bool hwButtPress = !digitalRead(key1);
+  bool chButtPress = !digitalRead(key2);
+  while (!digitalRead(key1) || !digitalRead(key2) ) { // 0 = pressed, buttons are pulled up.
+    // wait until the button is released, this should debounce enough
+    SerialBT.println("debounce");
+    delay(20);
+  }
+
+  // Using the relay state as the source of truth.  This is far from perfect
+  // but I think it's safe and efficient 
+  
+  if (hwButtPress){
+    bool hwState = digitalRead(relay1);
+    std::string urlState = (hwState) ? "off" : "on";
+    std::string url = "http://piwarmer.whizzy.org/set/hw/"+urlState; //on|off
+    http.begin(wificlient, url.c_str());
+    int httpReturn = http.POST("");
+    SerialBT.print("HTTP Return code: ");
+    SerialBT.print(httpReturn);
+    http.end();
+    digitalWrite(relay1, !hwState);
+    updateSwitchStatus("hw", "p37");
+  };
+  if (chButtPress){
+    bool chState = digitalRead(relay2);
+    std::string urlState = (chState) ? "off" : "on";
+    std::string url = "http://piwarmer.whizzy.org/set/ch/"+urlState; //on|off
+    http.begin(wificlient, url.c_str());
+    int httpReturn = http.POST("");
+    SerialBT.print("HTTP Return code: ");
+    SerialBT.print(httpReturn);
+    http.end();
+    digitalWrite(relay2, !chState);
+    updateSwitchStatus("ch", "p0");
+  }
+};
 
 void setup() {
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, 17,16);
-  Serial.println("Booting");
+  SerialBT.begin("nspanel");
+  SerialBT.println("Booting");
   WiFi.mode(WIFI_STA);
   WiFi.begin(STASSID, STAPSK);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    Serial.println("Connection Failed! Rebooting...");
+    SerialBT.println("Connection Failed! Rebooting...");
     delay(5000);
     ESP.restart();
   }
-
-  // Port defaults to 3232
-  // ArduinoOTA.setPort(3232);
-
-  // Hostname defaults to esp3232-[MAC]
-  // ArduinoOTA.setHostname("myesp32");
-
-  // No authentication by default
-  // ArduinoOTA.setPassword("admin");
-
-  // Password can be set with it's md5 value as well
-  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
-  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
 
   ArduinoOTA
     .onStart([]() {
@@ -540,58 +556,61 @@ void setup() {
       Serial.println("Start updating " + type);
     })
     .onEnd([]() {
-      Serial.println("\nEnd");
+      SerialBT.println("\nEnd");
     })
     .onProgress([](unsigned int progress, unsigned int total) {
-      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+      SerialBT.printf("Progress: %u%%\r", (progress / (total / 100)));
     })
     .onError([](ota_error_t error) {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+      SerialBT.printf("Error[%u]: ", error);
+      if (error == OTA_AUTH_ERROR) SerialBT.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) SerialBT.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) SerialBT.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) SerialBT.println("Receive Failed");
+      else if (error == OTA_END_ERROR) SerialBT.println("End Failed");
     });
 
   ArduinoOTA.begin();
 
-  Serial.println("Ready");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
+  SerialBT.println("Ready");
+  SerialBT.print("IP address: ");
+  SerialBT.println(WiFi.localIP());
 
   // NS Panel Specifics
   //pinMode(21, OUTPUT); // Buzzer. GPIO21 but which port do I put here?
   ESP32PWM::allocateTimer(0);
   ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2);
-  ESP32PWM::allocateTimer(3);  
+  ESP32PWM::allocateTimer(3);
   pinMode(4, OUTPUT);  // Screen reset. High = on?
   digitalWrite(4, LOW); // Switch on screen, LOW = on.
+  pinMode(key1, INPUT_PULLUP);
+  pinMode(key2, INPUT_PULLUP);
+  pinMode(relay1, OUTPUT);
+  pinMode(relay2, OUTPUT);
+  adcAttachPin(ntc);
+  analogSetClockDiv(255);
 
   if(!SPIFFS.begin()){
-       Serial.println(F("An Error has occurred while mounting SPIFFS"));
-       Serial.println(F("Did you upload the data directory that came with this example?"));
+       SerialBT.println(F("An Error has occurred while mounting SPIFFS"));
+       SerialBT.println(F("Did you upload the data directory that came with this?"));
        return;
   } 
 
 MDNS.begin(host);
-  Serial.print(F("http://"));
-  Serial.print(host);
-  Serial.println(F(".local"));
+  SerialBT.print(F("http://"));
+  SerialBT.print(host);
+  SerialBT.println(F(".local"));
 
   //SERVER INIT
   server.on("/", HTTP_POST, [](){ 
-
-    Serial.println(F("Successfully updated Nextion!\n"));
+    SerialBT.println(F("Successfully updated Nextion!\n"));
     // Redirect the client to the success page after handeling the file upload
     server.sendHeader(F("Location"),F("/success.html"));
     server.send(303);
     return true;
-  },
-    // Receive and save the file
-    handleFileUpload
-  );
+    }, 
+    handleFileUpload);
 
   // receive fileSize once a file is selected (Workaround as the file content-length is of by +/- 200 bytes. Known issue: https://github.com/esp8266/Arduino/issues/3787)
   server.on("/fs", HTTP_POST, [](){
@@ -606,9 +625,8 @@ MDNS.begin(host);
       server.send(404, F("text/plain"), F("FileNotFound"));
   });
 
-
   server.begin();
-  Serial.println(F("\nHTTP server started"));    
+  SerialBT.println(F("\nHTTP server started"));    
 
   // NTP
   timeClient.begin();
@@ -622,34 +640,41 @@ MDNS.begin(host);
   doWeather();
 }
 
-byte pic = 2;
+// byte pic = 2;
 
 void loop() {
   ArduinoOTA.handle();
   timeClient.update();  // Has it's own rate limiter, so call with abandon
   server.handleClient();
-
+  
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= 2500) {
     previousMillis = millis();
     //tone(21,4186, 100);
-    // std::string cmd = "page0.p8.pic=";
-    // cmd += std::to_string(pic);
-    // writeNxt(cmd);
-    // if (pic == 2) {
-    //   pic = 3;
-    // } else {
-    //   pic =2;
-    // }
+    
+    // https://www.e-tinkers.com/2019/10/using-a-thermistor-with-arduino-and-unexpected-esp32-adc-non-linearity/
+    // This thing is way out.  It needs some calibration, but I can't be arsed with all that, so I'll just guess
+    // It says 29.3, I think it's 22 = 1.33
+    double Vout = analogRead(ntc) * 3.3/4095.0;
+    double Rt = 10000.0 * Vout / (3.3 - Vout);
+    double T = 1/(1/298.15 + log(Rt/10000.0)/3950.0);
+    double Tc = T - 273.15;
+    double Cc = Tc / 1.33;
+    int temp = (int) Cc;
+        
+    std::string t = std::to_string(temp);
+    writeNxt("n0.val="+t);
+    SerialBT.print("Raw temp C: ");
+    SerialBT.println(Tc);
+
+    updateSwitchStatus("hw", "p37");
+    updateSwitchStatus("ch", "p0");
   }
 
-  if (currentMillis - threehourmillis >= 10800000){
-    threehourmillis = millis();
+  if (currentMillis - hourmillis >= 3600000){
+    hourmillis = millis();
     doWeather();
-  }
+  };
 
-  if(Serial2.available()) {
-    Serial.write(".");
-    Serial.write(Serial2.read());
-  }
+  doButtonPress();
 }
