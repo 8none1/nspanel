@@ -41,7 +41,6 @@ const char* host = "nextion";
 unsigned long previousMillis = 0;
 unsigned long hourmillis = 0;
 unsigned long minutemillis = 0;
-unsigned long fiveminsmillis = 0;
 
 const byte key1   = 14;
 const byte key2   = 27;
@@ -148,6 +147,7 @@ std::string dateToDayName(unsigned int y, unsigned int m, unsigned int d) {
 
 
 void doWeather() {
+  // Every three hours we should update ourselves
   // We need a lot of space for the JSON, so do it all in here and then throw it all away
   //std::string weatherLocation = "353363";
   
@@ -223,16 +223,13 @@ void doWeather() {
     int nightMinTempInt = atoi(nightMinTemp);
     //const char* SiteRep_DV_Location_Period_item_Rep_1_FNm = SiteRep_DV_Location_Period_item_Rep_1["FNm"];
     const char* nightWeatherType = SiteRep_DV_Location_Period_item_Rep_1["W"];
-    SerialBT.print("Night waether type:" );
-    SerialBT.println(nightWeatherType);
     const char* timePeriodNight = SiteRep_DV_Location_Period_item_Rep_1["$"];
 
     if (count == 0) {
-      doOutsideTemperature();
       // First loop we update the main weather
       if (timeClient.getHours() > 16) {
         // it's already night, so let's skip straight to the night forecast
-        byte weatherPic = WEATHER_CODES_LARGE_NIGHT[atoi(nightWeatherType)];
+        byte weatherPic = WEATHER_CODES_LARGE[atoi(nightWeatherType)];
         std::string weatherPicStr = std::to_string(weatherPic);
         std::string command = "p8.pic="+weatherPicStr;
         writeNxt(command.c_str());
@@ -266,9 +263,8 @@ void doWeather() {
           pos += 1;
         }
       } else {
-        // First loop, so do big picture for day, then small pic for night
         byte weatherPic = WEATHER_CODES_LARGE[atoi(dayWeatherType)];
-        byte weatherPicSm = WEATHER_CODES_SMALL_NIGHT[atoi(nightWeatherType)];
+        byte weatherPicSm = WEATHER_CODES_SMALL[atoi(nightWeatherType)];
         std::string weatherPicStr = std::to_string(weatherPic);
         std::string command = "p8.pic="+weatherPicStr;
         writeNxt(command);
@@ -354,9 +350,7 @@ void doWeather() {
       // updated the big picture and the first little one, or just the big one.
       // `count` should tell us where we got to.
       byte weatherPicDay = WEATHER_CODES_SMALL[atoi(dayWeatherType)];
-      byte weatherPicNight = WEATHER_CODES_SMALL_NIGHT[atoi(nightWeatherType)];
-      SerialBT.print("Night weather byte: ");
-      SerialBT.println(weatherPicNight);
+      byte weatherPicNight = WEATHER_CODES_SMALL[atoi(nightWeatherType)];
       std::string weatherPicDayS    = std::to_string(weatherPicDay);
       std::string weatherPicNightS  = std::to_string(weatherPicNight);
       std::string dayid = std::to_string(count);
@@ -468,13 +462,10 @@ void doWeather() {
 
 void updateSwitchStatus(std::string control, std::string picElement) {
     byte relay = (control == "hw") ? relay1 : relay2;
-    std::string url = "http://piwarmer.whizzy.org/get/" + control;
-    std::string text_label = (control == "hw") ? "t3" : "t2";
-    std::string picId = "";
-    std::string command = "";
     StaticJsonDocument<64> doc;
-    //wificlient.setTimeout(5000);
+    wificlient.setTimeout(5000);
     http.useHTTP10(true);
+    std::string url = "http://piwarmer.whizzy.org/get/" + control;
     http.begin(wificlient, url.c_str());
     int returnCode = http.GET();
     if (returnCode == 200) {
@@ -484,14 +475,21 @@ void updateSwitchStatus(std::string control, std::string picElement) {
         SerialBT.println(error.c_str());
       } else {
         bool state = doc["state"];
-        picId = (state) ? "93" : "94";
-        digitalWrite(relay, state);
-        command = "page0." + picElement + ".pic=" + picId; //93";
-        writeNxt(command);
-        command = "page1." + picElement + ".pic="+ picId; //93";
-        writeNxt(command);
-        command = "vis " + text_label + ",1";
-        writeNxt(command);
+        //SerialBT.print("State:");
+        //SerialBT.println(state);
+        if (state) {
+          std::string command = "page0." + picElement + ".pic=93";
+          writeNxt(command);
+          command = "page1." + picElement + ".pic=93";
+          writeNxt(command);
+          digitalWrite(relay, HIGH);
+        } else {
+          std::string command = "page0." + picElement + ".pic=94";
+          writeNxt(command);
+          command = "page1." + picElement + ".pic=94";
+          writeNxt(command);
+          digitalWrite(relay, LOW);
+        }
       }
     } else {
       SerialBT.print("Return code: ");
@@ -553,54 +551,43 @@ void doOutsideTemperature(){
       JsonObject fields = doc["fields"];
       int humidity = fields["humidity"]; // 77
       float temperature = fields["temperature"]; // 4.6875
+      //SerialBT.print("Read outside temp: ");
+      //SerialBT.println(temperature);
+      // Round to nearest half a degree
       temperature = temperature * 2;
       temperature = round(temperature);
       temperature = temperature / 2;
+      //SerialBT.print("Rounded temp: ");
+      //SerialBT.println(temperature);
       std::string temperature_string = std::to_string(temperature);
       std::size_t point = temperature_string.find('.');
       std::string trimmed_temp = "";
       if (point != std::string::npos) {
         trimmed_temp = temperature_string.substr(0,point+2);
+        //SerialBT.print("Trimmed: ");
+        //SerialBT.println(trimmed_temp.c_str());
+        //SerialBT.print("Last char: ");
         size_t len = trimmed_temp.length();
+        //SerialBT.print("Len: ");
+        //SerialBT.println(len);
         std::string last = trimmed_temp.substr(len-1,1);
-        if (last == "0") trimmed_temp = trimmed_temp.substr(0,point);
+        //SerialBT.println(last.c_str());
+        if (last == "0") {
+          trimmed_temp = trimmed_temp.substr(0,point);
+        }
         std::string command = "page0.t11.txt=\"" + trimmed_temp + "\xB0\"";
+        //SerialBT.print("Temp command:");
+        //SerialBT.println(command.c_str());
         writeNxt(command);
       }
+      
     }
-  }
+  } else {
+    //SerialBT.print("Return code: ");
+    //SerialBT.println(returnCode);
+  };
   http.end();
-};
-
-void doHWC(){
- StaticJsonDocument<96> doc;
-  http.useHTTP10(true);
-  std::string url = "http://piwarmer.whizzy.org/get/hwc";
-  std::string command = "";
-  http.begin(wificlient, url.c_str());
-  int returnCode = http.GET();
-  if (returnCode == 200) {
-    DeserializationError error = deserializeJson(doc, http.getStream());
-    if (error) {
-      SerialBT.print("Outside temp deserialisation Err: ");
-      SerialBT.println(error.c_str());
-    } else {
-      //bool state = doc["state"]; // false
-      //int top = doc["top"]; // 57
-      int mid = doc["mid"]; // 50
-      //int btm = doc["btm"]; // 51
-      mid = mid - 30;
-      mid = (mid<0) ? 0 : mid;
-      mid = mid * 3 + 2;
-      command = "page1.h1.val="+std::to_string(mid);
-      SerialBT.print("HWC command: ");
-      SerialBT.println(command.c_str());
-      writeNxt(command);
-      }
-    }
-  http.end();
-};
-
+}
 
 void setup() {
   Serial.begin(115200);
@@ -711,7 +698,6 @@ MDNS.begin(host);
   writeNxt("page 0");
   writeNxt("vis michaelfish,0");
   doWeather();
-  doHWC();
 }
 
 // byte pic = 2;
@@ -745,20 +731,15 @@ void loop() {
     updateSwitchStatus("ch", "p0");
   }
 
-  if (millis() - fiveminsmillis > 300000) {
-    fiveminsmillis = millis();
-    doHWC();
+  if (currentMillis - hourmillis >= 3600000){
+    hourmillis = millis();
+    doWeather();
   };
 
   if (millis() - minutemillis > 60000) {
     minutemillis = millis();
     doOutsideTemperature();
   }
-
-  if (currentMillis - hourmillis >= 3600000){
-    hourmillis = millis();
-    doWeather();
-  };
 
   doButtonPress();
 }
