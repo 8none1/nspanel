@@ -160,7 +160,7 @@ const byte WEATHER_CODES_SMALL_NIGHT[] = {
 78, // 9	Light rain shower (night)
 61, // 10	Light rain shower (day)
 61, // 11	Drizzle
-61, // 12	Light rain
+78, // 12	Light rain
 79, // 13	Heavy rain shower (night)
 62, // 14	Heavy rain shower (day)
 62, // 15	Heavy rain

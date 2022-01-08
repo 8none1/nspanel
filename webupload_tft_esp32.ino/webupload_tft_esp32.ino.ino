@@ -65,6 +65,7 @@ WiFiClient wificlient;
 HTTPClient http;
 
 // Serial Bluetooth
+// This is quite heavy.  Might disable it once everything works.
 BluetoothSerial SerialBT;
 
 
@@ -223,8 +224,6 @@ void doWeather() {
     int nightMinTempInt = atoi(nightMinTemp);
     //const char* SiteRep_DV_Location_Period_item_Rep_1_FNm = SiteRep_DV_Location_Period_item_Rep_1["FNm"];
     const char* nightWeatherType = SiteRep_DV_Location_Period_item_Rep_1["W"];
-    SerialBT.print("Night waether type:" );
-    SerialBT.println(nightWeatherType);
     const char* timePeriodNight = SiteRep_DV_Location_Period_item_Rep_1["$"];
 
     if (count == 0) {
@@ -355,8 +354,6 @@ void doWeather() {
       // `count` should tell us where we got to.
       byte weatherPicDay = WEATHER_CODES_SMALL[atoi(dayWeatherType)];
       byte weatherPicNight = WEATHER_CODES_SMALL_NIGHT[atoi(nightWeatherType)];
-      SerialBT.print("Night weather byte: ");
-      SerialBT.println(weatherPicNight);
       std::string weatherPicDayS    = std::to_string(weatherPicDay);
       std::string weatherPicNightS  = std::to_string(weatherPicNight);
       std::string dayid = std::to_string(count);
@@ -592,6 +589,7 @@ void doHWC(){
       mid = mid - 30;
       mid = (mid<0) ? 0 : mid;
       mid = mid * 3 + 2;
+      mid = 66 - mid;
       command = "page1.h1.val="+std::to_string(mid);
       SerialBT.print("HWC command: ");
       SerialBT.println(command.c_str());
