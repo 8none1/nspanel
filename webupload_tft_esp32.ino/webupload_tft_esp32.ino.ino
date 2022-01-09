@@ -92,8 +92,7 @@ bool handleFileRead(String path) {                          // send the right fi
   return false;
 }
 
-
-// handle the file uploads
+// handle the TFT file uploads
 bool handleFileUpload(){
   HTTPUpload& upload = server.upload();
 
@@ -122,10 +121,11 @@ bool handleFileUpload(){
   }
 return false;
 }
-// End Uploader stuff #######################
 
 bool writeNxt(std::string data) {
   byte terminator[3] = {255,255,255};
+  SerialBT.print("Outgoing NXT command: ");
+  SerialBT.println(data.c_str());
   Serial2.write(data.c_str());
   Serial2.write(terminator,3);
   return true;
@@ -147,16 +147,26 @@ std::string dateToDayName(unsigned int y, unsigned int m, unsigned int d) {
   return day[dn % 7];
 }
 
+void setPicture(int pictureId, int pictureNumber) {
+  std::string picId = "p" + std::to_string(pictureId);
+  std::string picCmd = picId + ".pic=";
+  picCmd += std::to_string(pictureNumber);
+  writeNxt(picCmd);
+  writeNxt("vis "+picId + ",1");
+}
+
+void setText(int textId, std::string text) {
+  std::string txtId = "t" + std::to_string(textId);
+  std::string txtCmd = txtId + ".txt=\"" + text + "\"";
+  writeNxt(txtCmd);
+  writeNxt("vis " + txtId + ",1");
+}
+
 
 void doWeather() {
-  // We need a lot of space for the JSON, so do it all in here and then throw it all away
-  //std::string weatherLocation = "353363";
-  
-  // Make the weather man appear
   writeNxt("page 0");
   writeNxt("vis 255,0");
   writeNxt("vis michaelfish,1");
-  //writeNxt("ref michaelfish");
   delay(500);
 
   std::string url = "http://datapoint.metoffice.gov.uk/public/data/val/wxfcs/all/json/";
@@ -178,7 +188,8 @@ void doWeather() {
   };
 
   int count = 0;
-  
+  std::string dayAndTemperatureS = "";
+
   JsonObject SiteRep_DV = doc["SiteRep"]["DV"];
   JsonObject SiteRep_DV_Location = SiteRep_DV["Location"];
   
@@ -194,265 +205,161 @@ void doWeather() {
     std::string dayshort = dateToDayName(yyyy,mm,dd);
 
     JsonObject SiteRep_DV_Location_Period_item_Rep_0 = SiteRep_DV_Location_Period_item["Rep"][0];
-    const char* windDirDay = SiteRep_DV_Location_Period_item_Rep_0["D"];
-    const char* maxWindSpeedDay = SiteRep_DV_Location_Period_item_Rep_0["Gn"];
-    int maxWindSpeedDayInt = atoi(maxWindSpeedDay);
-    //const char* humidNoon0 = SiteRep_DV_Location_Period_item_Rep_0["Hn"];
-    const char* rainChanceDay = SiteRep_DV_Location_Period_item_Rep_0["PPd"];
-    int rainChanceDayInt = atoi(rainChanceDay);
-    const char* windSpeedDay = SiteRep_DV_Location_Period_item_Rep_0["S"];
-    int windSpeedDayInt = atoi(windSpeedDay);
-    //const char* vis0 = SiteRep_DV_Location_Period_item_Rep_0["V"];
-    const char* dayMaxTemp = SiteRep_DV_Location_Period_item_Rep_0["Dm"];
-    int dayMaxTempInt = atoi(dayMaxTemp);
+    // Day
+    //const char* windDirDay = SiteRep_DV_Location_Period_item_Rep_0["D"];
+    int maxWindSpeedDayInt = atoi(SiteRep_DV_Location_Period_item_Rep_0["Gn"]);
+    int rainChanceDayInt = atoi(SiteRep_DV_Location_Period_item_Rep_0["PPd"]);
+    int windSpeedDayInt = atoi(SiteRep_DV_Location_Period_item_Rep_0["S"]);
+    int dayMaxTempInt = atoi(SiteRep_DV_Location_Period_item_Rep_0["Dm"]);
     //const char* feelsLikeDayMax0 = SiteRep_DV_Location_Period_item_Rep_0["FDm"];
-    const char* dayWeatherType = SiteRep_DV_Location_Period_item_Rep_0["W"];
-    const char* uvIndexDay = SiteRep_DV_Location_Period_item_Rep_0["U"];
-    int uvIndexDayInt = atoi(uvIndexDay);
+    int dayWeatherTypeInt = atoi(SiteRep_DV_Location_Period_item_Rep_0["W"]);
+    int uvIndexDayInt = atoi(SiteRep_DV_Location_Period_item_Rep_0["U"]);
     const char* timePeriodDay = SiteRep_DV_Location_Period_item_Rep_0["$"];
  
     JsonObject SiteRep_DV_Location_Period_item_Rep_1 = SiteRep_DV_Location_Period_item["Rep"][1];
-    const char* windDirNight = SiteRep_DV_Location_Period_item_Rep_1["D"];
-    const char* maxWindSpeedNight = SiteRep_DV_Location_Period_item_Rep_1["Gm"];
-    int maxWindSpeedNightInt = atoi(maxWindSpeedNight);
-    //const char* SiteRep_DV_Location_Period_item_Rep_1_Hm = SiteRep_DV_Location_Period_item_Rep_1["Hm"];
-    const char* rainChanceNight = SiteRep_DV_Location_Period_item_Rep_1["PPn"];
-    int rainChanceNightInt = atoi(rainChanceNight);
-    const char* windSpeedNight = SiteRep_DV_Location_Period_item_Rep_1["S"];
-    //const char* SiteRep_DV_Location_Period_item_Rep_1_V = SiteRep_DV_Location_Period_item_Rep_1["V"];
-    const char* nightMinTemp = SiteRep_DV_Location_Period_item_Rep_1["Nm"];
-    int nightMinTempInt = atoi(nightMinTemp);
+    // Night
+    //const char* windDirNight = SiteRep_DV_Location_Period_item_Rep_1["D"];
+    int maxWindSpeedNightInt = atoi(SiteRep_DV_Location_Period_item_Rep_1["Gm"]);
+    int rainChanceNightInt = atoi(SiteRep_DV_Location_Period_item_Rep_1["PPn"]);
+    int nightMinTempInt = atoi(SiteRep_DV_Location_Period_item_Rep_1["Nm"]);
     //const char* SiteRep_DV_Location_Period_item_Rep_1_FNm = SiteRep_DV_Location_Period_item_Rep_1["FNm"];
-    const char* nightWeatherType = SiteRep_DV_Location_Period_item_Rep_1["W"];
+    int nightWeatherTypeInt = atoi(SiteRep_DV_Location_Period_item_Rep_1["W"]);
     const char* timePeriodNight = SiteRep_DV_Location_Period_item_Rep_1["$"];
 
+    const int snowflake = 9;
+    const int sunglasses = 8;
+    const int windy = 11;
+    const int umbrella = 10;
+    const int sm_snowflake = 2;
+    const int sm_sunglasses = 1;
+    const int sm_windy = 4;
+    const int sm_umbrella = 3;
+
     if (count == 0) {
+      //  First time round the loop, so do the big picture first.
       doOutsideTemperature();
+      writeNxt("vis t11,1");
       // First loop we update the main weather
+
       if (timeClient.getHours() > 16) {
         // it's already night, so let's skip straight to the night forecast
-        byte weatherPic = WEATHER_CODES_LARGE_NIGHT[atoi(nightWeatherType)];
-        std::string weatherPicStr = std::to_string(weatherPic);
-        std::string command = "p8.pic="+weatherPicStr;
-        writeNxt(command.c_str());
-        writeNxt("vis t11,1");
-        count=1;
-        writeNxt("vis p8,1");
-
-        int pos = 38;        
+        setPicture(8, WEATHER_CODES_LARGE_NIGHT[nightWeatherTypeInt]);
+        int pos = 38;
         if (maxWindSpeedNightInt > 20) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(98);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
+          setPicture(pos, windy);
           pos += 1;
         };
         if (nightMinTempInt < 5) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(96);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
+          setPicture(pos, snowflake);
           pos += 1;
         }
         if (rainChanceNightInt > 60) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(97);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
+          setPicture(pos, umbrella);
           pos += 1;
         }
+        count=1;
       } else {
-        // First loop, so do big picture for day, then small pic for night
-        byte weatherPic = WEATHER_CODES_LARGE[atoi(dayWeatherType)];
-        byte weatherPicSm = WEATHER_CODES_SMALL_NIGHT[atoi(nightWeatherType)];
-        std::string weatherPicStr = std::to_string(weatherPic);
-        std::string command = "p8.pic="+weatherPicStr;
-        writeNxt(command);
+        // First time round the loop, and it's still daytime, so do the 
+        // big picture and then the first small as well.
+        int weatherPicSm = WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt];
+        setPicture(8, WEATHER_CODES_LARGE[dayWeatherTypeInt]);
         writeNxt("vis t11,1");
+
         int pos = 38;        
         if (maxWindSpeedDayInt > 20) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(98);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
+          setPicture(pos, windy);
           pos += 1;
         };
+
         if (dayMaxTempInt < 5) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(96);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
+          setPicture(pos, snowflake);
           pos += 1;
         }
         if (rainChanceDayInt > 60) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(97);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
+          setPicture(pos, umbrella);
           pos += 1;
         }
 
         if (uvIndexDayInt > 5) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(95);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
-          pos += 1;
-        }  
+          setPicture(pos, sunglasses);
+        }
 
-        weatherPicStr = std::to_string(weatherPicSm);
-        command = "p1.pic="+weatherPicStr;
-        writeNxt(command.c_str());
-        writeNxt("vis p1,1");
-        std::string dayAndTemperatureS = dayshort+": "+nightMinTemp;//+"°";
+        // Now the first small picture p1
+        setPicture(1, WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt]);
+        dayAndTemperatureS = dayshort+": "+std::to_string(nightMinTempInt);//+"°";
         dayAndTemperatureS += "\xB0";
-        //std::string textId = std::to_string(count+4)
-        command = "t4.txt=\""+dayAndTemperatureS+"\"";
-        writeNxt(command.c_str());
+        setText(4, dayAndTemperatureS);
         pos = 9;
         if (maxWindSpeedNightInt > 20) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(91);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
+          setPicture(pos, windy);
           pos += 1;
         };
         if (nightMinTempInt < 5) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(89);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
+          setPicture(pos, snowflake);
           pos += 1;
         }
         if (rainChanceNightInt > 60) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(90);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
+          setPicture(pos, umbrella);
           pos += 1;
         }
 
         count=2;
-        writeNxt("vis p8,1");
-        writeNxt("vis t4,1");
       }
-      delay(1000);
-      continue;
+      //delay(1000);
     } else {
-      // This should be the next time we come in to the loop.  We will have either
-      // updated the big picture and the first little one, or just the big one.
-      // `count` should tell us where we got to.
-      byte weatherPicDay = WEATHER_CODES_SMALL[atoi(dayWeatherType)];
-      byte weatherPicNight = WEATHER_CODES_SMALL_NIGHT[atoi(nightWeatherType)];
-      std::string weatherPicDayS    = std::to_string(weatherPicDay);
-      std::string weatherPicNightS  = std::to_string(weatherPicNight);
-      std::string dayid = std::to_string(count);
-      std::string nightid = std::to_string(count+1);
-      std::string dayCommand = "p"+dayid+".pic="+weatherPicDayS;
-      std::string nightCommand = "p"+nightid+".pic="+weatherPicNightS;
-      writeNxt(dayCommand.c_str());
-      std::string visDCmd = "vis p" + dayid + ",1";
-      std::string visNCmd = "vis p" + nightid + ",1";
-      writeNxt(visDCmd);
+      // Count should be 1 for the first small or 2 for the second small.
 
-      // Deal with day temperatures
-      int t = atoi(dayMaxTemp);
-      std::string dayAndTemperatureS = dayshort+": " + std::to_string(t);
+      setPicture(count, WEATHER_CODES_SMALL[dayWeatherTypeInt]);
+      
+      dayAndTemperatureS = dayshort+": " + std::to_string(dayMaxTempInt);
       dayAndTemperatureS += "\xB0"; // °
-      std::string textId = std::to_string(count+3);
-      std::string command = "t"+textId+".txt=\""+dayAndTemperatureS+"\"";
-      writeNxt(command.c_str());
-      writeNxt("vis t"+textId+",1");
+      setText(count+3, dayAndTemperatureS);
+
       int pos = count * 4 + 5;
       if (maxWindSpeedDayInt > 20) {
-        std::string pid = "p" + std::to_string(pos);
-        std::string pc = pid + ".pic=";
-        pc += std::to_string(91);
-        writeNxt(pc);
-        writeNxt("vis "+pid+",1");
+        setPicture(pos, sm_windy);
         pos += 1;
       };
       if (dayMaxTempInt < 5) {
-        std::string pid = "p" + std::to_string(pos);
-        std::string pc = pid + ".pic=";
-        pc += std::to_string(89);
-        writeNxt(pc);
-        writeNxt("vis "+pid+",1");
+        setPicture(pos, sm_snowflake);
         pos += 1;
       }
       if (rainChanceDayInt > 60) {
-        std::string pid = "p" + std::to_string(pos);
-        std::string pc = pid + ".pic=";
-        pc += std::to_string(90);
-        writeNxt(pc);
-        writeNxt("vis "+pid+",1");
+        setPicture(pos, sm_umbrella);
         pos += 1;
       }
       if (uvIndexDayInt > 5) {
-        std::string pid = "p" + std::to_string(pos);
-        std::string pc = pid + ".pic=";
-        pc += std::to_string(95);
-        writeNxt(pc);
-        writeNxt("vis "+pid+",1");
+        setPicture(pos, sm_sunglasses);
         pos += 1;
-      } 
+      }
       
-      delay(1000);
       pos = count * 4 + 9;
+      count +=1;
+      if (count > 7) break;
 
-      // Deal with night temperatures
-      t = atoi(nightMinTemp);
-      dayAndTemperatureS = dayshort+": " + std::to_string(t);
-      dayAndTemperatureS += "\xB0";
-      textId = std::to_string(count+4);
-      command = "t"+textId+".txt=\""+dayAndTemperatureS+"\"";
-      if (count < 7 ) {
-        writeNxt(nightCommand.c_str()); // Skip the last one if we'd overflow
-        writeNxt(visNCmd);
-        writeNxt(command.c_str()); // Skip the last one if we'd overflow
-        writeNxt("vis t"+textId+",1");
-        if (maxWindSpeedNightInt > 20) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(91);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
-          pos += 1;
-        };
-        if (nightMinTempInt < 5) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(89);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
-          pos += 1;
-        }
-        if (rainChanceNightInt > 60) {
-          std::string pid = "p" + std::to_string(pos);
-          std::string pc = pid + ".pic=";
-          pc += std::to_string(90);
-          writeNxt(pc);
-          writeNxt("vis "+pid+",1");
-          pos += 1;
-        }
+      setPicture(count, WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt]);
+      dayAndTemperatureS = dayshort + ": " + std::to_string(nightMinTempInt);
+      dayAndTemperatureS += "\xB0"; // °
+      setText(count+3, dayAndTemperatureS);
+
+      if (maxWindSpeedNightInt > 20) {
+        setPicture(pos, sm_windy);
+        pos += 1;
       };
+      if (nightMinTempInt < 5) {
+        setPicture(pos, sm_snowflake);
+        pos += 1;
+      }
+      if (rainChanceNightInt > 60) {
+        setPicture(pos, sm_umbrella);
+        pos += 1;
+      }
 
-      delay(1000);
-      count+=2;
+      //delay(1000);
+      count+=1;
     }
-  } 
+  }
   
-  // Make the weather man vanish
   writeNxt("vis michaelfish,0");
   writeNxt("vis t1,1");
   writeNxt("vis n0,1");
@@ -460,7 +367,6 @@ void doWeather() {
   writeNxt("vis t2,1");
   writeNxt("vis p37,1");
   writeNxt("vis p0,1");
-  writeNxt("vis t0,1");
 }
 
 void updateSwitchStatus(std::string control, std::string picElement) {
@@ -481,11 +387,14 @@ void updateSwitchStatus(std::string control, std::string picElement) {
         SerialBT.println(error.c_str());
       } else {
         bool state = doc["state"];
-        picId = (state) ? "93" : "94";
+        picId = (state) ? "6" : "7";
         digitalWrite(relay, state);
-        command = "page0." + picElement + ".pic=" + picId; //93";
+        // TODO:  Make the Nextion set the state of the icons in an 
+        // if statement, and then just set a global variable instead
+        // of updating the pictures.
+        command = "page0." + picElement + ".pic=" + picId;
         writeNxt(command);
-        command = "page1." + picElement + ".pic="+ picId; //93";
+        command = "page1." + picElement + ".pic="+ picId;
         writeNxt(command);
         command = "vis " + text_label + ",1";
         writeNxt(command);
@@ -501,8 +410,7 @@ void doButtonPress() {
   bool hwButtPress = !digitalRead(key1);
   bool chButtPress = !digitalRead(key2);
   while (!digitalRead(key1) || !digitalRead(key2) ) { // 0 = pressed, buttons are pulled up.
-    // wait until the button is released, this should debounce enough
-    SerialBT.println("debounce");
+    //SerialBT.println("debounce");
     delay(20);
   }
 
@@ -590,6 +498,9 @@ void doHWC(){
       mid = (mid<0) ? 0 : mid;
       mid = mid * 3 + 2;
       mid = 66 - mid;
+      mid = (mid < 0) ? 0 : mid;
+      // TODO: store this in a global var on the nextion instead of setting
+      // the state directly.  Have the nextion set the state.
       command = "page1.h1.val="+std::to_string(mid);
       SerialBT.print("HWC command: ");
       SerialBT.println(command.c_str());
@@ -605,6 +516,7 @@ void setup() {
   Serial2.begin(115200, SERIAL_8N1, 17,16);
   SerialBT.begin("nspanel");
   SerialBT.println("Booting");
+  WiFi.setHostname("nextion");
   WiFi.mode(WIFI_STA);
   WiFi.begin(STASSID, STAPSK);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -647,7 +559,6 @@ void setup() {
   SerialBT.println(WiFi.localIP());
 
   // NS Panel Specifics
-  //pinMode(21, OUTPUT); // Buzzer. GPIO21 but which port do I put here?
   ESP32PWM::allocateTimer(0);
   ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2);
@@ -718,8 +629,6 @@ MDNS.begin(host);
   doHWC();
 }
 
-// byte pic = 2;
-
 void loop() {
   ArduinoOTA.handle();
   timeClient.update();  // Has it's own rate limiter, so call with abandon
@@ -745,13 +654,14 @@ void loop() {
     //SerialBT.print("Raw temp C: ");
     //SerialBT.println(Tc);
 
-    updateSwitchStatus("hw", "p37");
-    updateSwitchStatus("ch", "p0");
+    //updateSwitchStatus("hw", "p37");
+    //updateSwitchStatus("ch", "p0");
   }
 
   if (millis() - fiveminsmillis > 300000) {
     fiveminsmillis = millis();
     doHWC();
+    doWeather();
   };
 
   if (millis() - minutemillis > 60000) {
