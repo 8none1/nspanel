@@ -1,10 +1,48 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!-- Generator: Adobe Illustrator 22.0.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
-<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 30 30" style="enable-background:new 0 0 30 30;" xml:space="preserve">
-<path d="M11.83,16.77c0,0.19,0.06,0.35,0.19,0.48c0.13,0.13,0.29,0.19,0.47,0.19h2.87c0.19,0,0.35-0.06,0.47-0.19
-	c0.13-0.13,0.19-0.29,0.19-0.48c0-0.19-0.06-0.34-0.19-0.46c-0.13-0.12-0.29-0.18-0.47-0.18h-1.24L18,12.24
-	c0.12-0.14,0.18-0.3,0.18-0.5c0-0.18-0.06-0.33-0.18-0.46c-0.12-0.12-0.29-0.18-0.5-0.18c-0.2,0-0.36,0.06-0.48,0.18l-3.86,3.87
-	v-1.25c0-0.19-0.06-0.35-0.19-0.48c-0.13-0.13-0.29-0.19-0.48-0.19c-0.19,0-0.35,0.07-0.47,0.2c-0.13,0.13-0.19,0.29-0.19,0.48
-	V16.77z"/>
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   version="1.1"
+   id="Layer_1"
+   x="0px"
+   y="0px"
+   viewBox="0 0 30 30"
+   style="enable-background:new 0 0 30 30;"
+   xml:space="preserve"
+   sodipodi:docname="wi-direction-down-left.svg"
+   inkscape:version="0.92.5 (2060ec1f9f, 2020-04-08)"><metadata
+   id="metadata9"><rdf:RDF><cc:Work
+       rdf:about=""><dc:format>image/svg+xml</dc:format><dc:type
+         rdf:resource="http://purl.org/dc/dcmitype/StillImage" /><dc:title></dc:title></cc:Work></rdf:RDF></metadata><defs
+   id="defs7" /><sodipodi:namedview
+   pagecolor="#ffffff"
+   bordercolor="#666666"
+   borderopacity="1"
+   objecttolerance="10"
+   gridtolerance="10"
+   guidetolerance="10"
+   inkscape:pageopacity="0"
+   inkscape:pageshadow="2"
+   inkscape:window-width="1918"
+   inkscape:window-height="1014"
+   id="namedview5"
+   showgrid="false"
+   inkscape:zoom="7.8666667"
+   inkscape:cx="12.076271"
+   inkscape:cy="15"
+   inkscape:window-x="1920"
+   inkscape:window-y="0"
+   inkscape:window-maximized="1"
+   inkscape:current-layer="Layer_1" />
+<path
+   d="m 9.412341,12.168024 c 0.2404163,-0.254559 0.5303301,-0.388909 0.876812,-0.39598 0.346483,-0.0071 0.636397,0.113137 0.883884,0.374766 0.254558,0.226275 0.374766,0.516188 0.360624,0.883884 l 0.01414,2.333452 7.2832,-7.2831993 c 0.240416,-0.2545584 0.53033,-0.3747666 0.876813,-0.3676955 0.346482,0.00707 0.636396,0.1414213 0.890954,0.4101219 0.254559,0.2262742 0.388909,0.516188 0.403051,0.8555992 0.01414,0.3394113 -0.09899,0.6505383 -0.339411,0.9050967 l -7.2832,7.2832 h 2.31931 c 0.33234,-0.0071 0.636396,0.113137 0.883884,0.360624 0.254558,0.254559 0.381837,0.551543 0.381837,0.890955 0,0.339411 -0.120208,0.629325 -0.374766,0.883883 -0.268701,0.240416 -0.558615,0.346482 -0.883884,0.318198 l -5.359869,0.07071 C 10.013382,19.684569 9.6951837,19.564361 9.412341,19.323944 9.1648536,19.048173 9.0446455,18.729975 9.0517165,18.383492 l 0.042426,-5.345727 C 9.0658587,12.698354 9.1719247,12.40844 9.412341,12.168024 Z"
+   id="path2"
+   inkscape:connector-curvature="0" />
 </svg>
