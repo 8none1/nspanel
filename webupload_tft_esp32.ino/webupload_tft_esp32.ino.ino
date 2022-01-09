@@ -689,6 +689,12 @@ MDNS.begin(host);
     server.send(200, F("text/plain"), "");
   });
 
+  server.on("/reboot", HTTP_POST, [](){
+    server.send(200, F("text/plain"), "Rebooting...");
+    delay(2000);
+    ESP.restart();
+  });
+
   // called when the url is not defined here
   // use it to load content from SPIFFS
   server.onNotFound([](){
