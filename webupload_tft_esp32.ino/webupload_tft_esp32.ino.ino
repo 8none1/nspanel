@@ -49,6 +49,9 @@ const byte relay1 = 22;
 const byte relay2 = 19;
 const byte ntc    = 38;
 
+// Forward declation:
+void doHWC();
+
 
 // NexUploader stuff
 int fileSize  = 0;
@@ -122,6 +125,43 @@ bool handleFileUpload(){
 return false;
 }
 
+void handleSerialInput(){
+  std::string incomingData= "";
+  while (Serial2.available()) {
+    incomingData+=(char)Serial2.read();
+  }
+  SerialBT.print("Received data from Nextion: ");
+  SerialBT.println(incomingData.c_str());
+  for (char const c: incomingData) {
+    SerialBT.print(c, HEX);
+    SerialBT.print(":");
+  }
+  Serial.println("--");
+  int strSize = incomingData.size();
+  char serialBytes[strSize+1];
+  strcpy(serialBytes, incomingData.c_str());
+  
+  byte a = 0;
+  for (int i=strSize-1; i > strSize-4; i--) {
+    a = serialBytes[i];
+    if (a != 255) {
+      return;
+    }
+  };
+
+  switch (serialBytes[0]) {
+    case 0x66:
+      // Page change
+      int page = serialBytes[1];
+      switch (page) {
+        case 1:
+          // Hot water page
+          doHWC();
+          SerialBT.println("Did Hotwater here");
+      }
+  };
+}
+
 bool writeNxt(std::string data) {
   byte terminator[3] = {255,255,255};
   SerialBT.print("Outgoing NXT command: ");
@@ -161,7 +201,6 @@ void setText(int textId, std::string text) {
   writeNxt(txtCmd);
   writeNxt("vis " + txtId + ",1");
 }
-
 
 void doWeather() {
   writeNxt("page 0");
@@ -239,7 +278,6 @@ void doWeather() {
       //  First time round the loop, so do the big picture first.
       doOutsideTemperature();
       writeNxt("vis t11,1");
-      // First loop we update the main weather
 
       if (timeClient.getHours() > 16) {
         // it's already night, so let's skip straight to the night forecast
@@ -261,11 +299,11 @@ void doWeather() {
       } else {
         // First time round the loop, and it's still daytime, so do the 
         // big picture and then the first small as well.
-        int weatherPicSm = WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt];
+        //int weatherPicSm = WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt];
         setPicture(8, WEATHER_CODES_LARGE[dayWeatherTypeInt]);
         writeNxt("vis t11,1");
-
         int pos = 38;        
+
         if (maxWindSpeedDayInt > 20) {
           setPicture(pos, windy);
           pos += 1;
@@ -286,20 +324,20 @@ void doWeather() {
 
         // Now the first small picture p1
         setPicture(1, WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt]);
-        dayAndTemperatureS = dayshort+": "+std::to_string(nightMinTempInt);//+"°";
-        dayAndTemperatureS += "\xB0";
+        dayAndTemperatureS = dayshort+": "+std::to_string(nightMinTempInt);
+        dayAndTemperatureS += "\xB0"; //°
         setText(4, dayAndTemperatureS);
         pos = 9;
         if (maxWindSpeedNightInt > 20) {
-          setPicture(pos, windy);
+          setPicture(pos, sm_windy);
           pos += 1;
         };
         if (nightMinTempInt < 5) {
-          setPicture(pos, snowflake);
+          setPicture(pos, sm_snowflake);
           pos += 1;
         }
         if (rainChanceNightInt > 60) {
-          setPicture(pos, umbrella);
+          setPicture(pos, sm_umbrella);
           pos += 1;
         }
 
@@ -410,7 +448,6 @@ void doButtonPress() {
   bool hwButtPress = !digitalRead(key1);
   bool chButtPress = !digitalRead(key2);
   while (!digitalRead(key1) || !digitalRead(key2) ) { // 0 = pressed, buttons are pulled up.
-    //SerialBT.println("debounce");
     delay(20);
   }
 
@@ -477,6 +514,26 @@ void doOutsideTemperature(){
   http.end();
 };
 
+void doInternalTemperature(){
+  double Vout = 0;
+    for (int i=0; i <= 10; i++) {
+      Vout += analogRead(ntc);
+      delay(10);
+    }
+    Vout = Vout / 10;
+    Vout = Vout * 3.3/4095.0;
+    double Rt = 10000.0 * Vout / (3.3 - Vout);
+    double T = 1/(1/298.15 + log(Rt/10000.0)/3950.0);
+    double Tc = T - 273.15;
+    double Cc = Tc / 1.42; // Tweak to get temperature correct.  It should be more or less linear, so a simple divider might do.
+    int temp = (int) Cc;
+        
+    std::string t = std::to_string(temp);
+    writeNxt("n0.val="+t);
+    //SerialBT.print("Raw temp C: ");
+    //SerialBT.println(Tc);
+};
+
 void doHWC(){
  StaticJsonDocument<96> doc;
   http.useHTTP10(true);
@@ -499,17 +556,14 @@ void doHWC(){
       mid = mid * 3 + 2;
       mid = 66 - mid;
       mid = (mid < 0) ? 0 : mid;
-      // TODO: store this in a global var on the nextion instead of setting
-      // the state directly.  Have the nextion set the state.
-      command = "page1.h1.val="+std::to_string(mid);
-      SerialBT.print("HWC command: ");
-      SerialBT.println(command.c_str());
+      command = "h1.val="+std::to_string(mid);
+      writeNxt(command);
+      command = "click h1,1"; // Runs the touch event code which switches the images
       writeNxt(command);
       }
     }
   http.end();
 };
-
 
 void setup() {
   Serial.begin(115200);
@@ -578,7 +632,7 @@ void setup() {
        return;
   } 
 
-MDNS.begin(host);
+  MDNS.begin(host);
   SerialBT.print(F("http://"));
   SerialBT.print(host);
   SerialBT.println(F(".local"));
@@ -625,15 +679,24 @@ MDNS.begin(host);
   };
   writeNxt("page 0");
   writeNxt("vis michaelfish,0");
+  doInternalTemperature();
   doWeather();
-  doHWC();
 }
 
 void loop() {
   ArduinoOTA.handle();
   timeClient.update();  // Has it's own rate limiter, so call with abandon
   server.handleClient();
+  if (Serial2.available()) {
+    handleSerialInput();
+  };
   
+
+  // TODO:
+  //  A timer which unless reset shows a sad face to indicate the ESP32 has hung
+  //  Some kind of flashing alarm looking light
+  // 
+
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= 2500) {
     previousMillis = millis();
@@ -642,31 +705,20 @@ void loop() {
     // https://www.e-tinkers.com/2019/10/using-a-thermistor-with-arduino-and-unexpected-esp32-adc-non-linearity/
     // This thing is way out.  It needs some calibration, but I can't be arsed with all that, so I'll just guess
     // It says 29.3, I think it's 22 = 1.33
-    double Vout = analogRead(ntc) * 3.3/4095.0;
-    double Rt = 10000.0 * Vout / (3.3 - Vout);
-    double T = 1/(1/298.15 + log(Rt/10000.0)/3950.0);
-    double Tc = T - 273.15;
-    double Cc = Tc / 1.33;
-    int temp = (int) Cc;
-        
-    std::string t = std::to_string(temp);
-    writeNxt("n0.val="+t);
-    //SerialBT.print("Raw temp C: ");
-    //SerialBT.println(Tc);
-
-    //updateSwitchStatus("hw", "p37");
-    //updateSwitchStatus("ch", "p0");
+    updateSwitchStatus("hw", "p37");
+    updateSwitchStatus("ch", "p0");
   }
 
   if (millis() - fiveminsmillis > 300000) {
     fiveminsmillis = millis();
-    doHWC();
+    //doHWC();
     doWeather();
   };
 
   if (millis() - minutemillis > 60000) {
     minutemillis = millis();
     doOutsideTemperature();
+    doInternalTemperature();
   }
 
   if (currentMillis - hourmillis >= 3600000){
