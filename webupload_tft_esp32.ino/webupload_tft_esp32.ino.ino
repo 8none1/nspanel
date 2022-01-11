@@ -273,6 +273,9 @@ void doWeather() {
     const int sm_sunglasses = 1;
     const int sm_windy = 4;
     const int sm_umbrella = 3;
+    const int lg_weather_offset = 18; // The picture ID of the first large weather icon (moon)
+    const int sm_weather_offset = 49; // same for small.  This is made easier since the Met Office start their scheme at zero
+
 
     if (count == 0) {
       //  First time round the loop, so do the big picture first.
@@ -281,7 +284,8 @@ void doWeather() {
 
       if (timeClient.getHours() > 16) {
         // it's already night, so let's skip straight to the night forecast
-        setPicture(8, WEATHER_CODES_LARGE_NIGHT[nightWeatherTypeInt]);
+        //setPicture(8, WEATHER_CODES_LARGE_NIGHT[nightWeatherTypeInt]);
+        setPicture(8, lg_weather_offset + nightWeatherTypeInt);
         int pos = 38;
         if (maxWindSpeedNightInt > 20) {
           setPicture(pos, windy);
@@ -300,7 +304,8 @@ void doWeather() {
         // First time round the loop, and it's still daytime, so do the 
         // big picture and then the first small as well.
         //int weatherPicSm = WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt];
-        setPicture(8, WEATHER_CODES_LARGE[dayWeatherTypeInt]);
+        //setPicture(8, WEATHER_CODES_LARGE[dayWeatherTypeInt]);
+        setPicture(8, lg_weather_offset + dayWeatherTypeInt);
         writeNxt("vis t11,1");
         int pos = 38;        
 
@@ -323,7 +328,8 @@ void doWeather() {
         }
 
         // Now the first small picture p1
-        setPicture(1, WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt]);
+        //setPicture(1, WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt]);
+        setPicture(1, sm_weather_offset + nightWeatherTypeInt);
         dayAndTemperatureS = dayshort+": "+std::to_string(nightMinTempInt);
         dayAndTemperatureS += "\xB0"; //°
         setText(4, dayAndTemperatureS);
@@ -347,7 +353,8 @@ void doWeather() {
     } else {
       // Count should be 1 for the first small or 2 for the second small.
 
-      setPicture(count, WEATHER_CODES_SMALL[dayWeatherTypeInt]);
+      //setPicture(count, WEATHER_CODES_SMALL[dayWeatherTypeInt]);
+      setPicture(count, sm_weather_offset + nightWeatherTypeInt);
       
       dayAndTemperatureS = dayshort+": " + std::to_string(dayMaxTempInt);
       dayAndTemperatureS += "\xB0"; // °
@@ -375,7 +382,8 @@ void doWeather() {
       count +=1;
       if (count > 7) break;
 
-      setPicture(count, WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt]);
+      //setPicture(count, WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt]);
+      setPicture(count, sm_weather_offset + nightWeatherTypeInt);
       dayAndTemperatureS = dayshort + ": " + std::to_string(nightMinTempInt);
       dayAndTemperatureS += "\xB0"; // °
       setText(count+3, dayAndTemperatureS);
