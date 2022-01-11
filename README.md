@@ -2,6 +2,12 @@
 
 ![image](https://user-images.githubusercontent.com/6552931/148619064-476c0c47-9504-4862-8d74-d1ddc394958e.png)
 
+# Colour Picker Tool
+![image](https://user-images.githubusercontent.com/6552931/148950031-4a6f1652-7c95-4f68-acee-02f427a1b061.png)
+
+This repo also includes a tool to help you find the right colours.  It offers three sliders for red, green and blue and calculates the 565 decimal colour number that the Nextion devices use.
+To use, flash the colour picker tool to your Nextion device, there is no microcontroller code needed, everything is done on the Nextion.
+
 Port my Raspi based smart thermostat to Nextion
 
 My original smart thermostat was built on a Rasp Pi and a 3.5" touchscreen and used a custom UI library written in Python.  I was pretty happy with it, but now I'm going to try and port it over to Nextion and use the Sonoff NSPanel instead. 
