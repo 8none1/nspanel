@@ -1,5 +1,4 @@
 #include "wificreds.h"
-#include "weatherMapping.h"
 #include "weatherApiKey.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -354,7 +353,7 @@ void doWeather() {
       // Count should be 1 for the first small or 2 for the second small.
 
       //setPicture(count, WEATHER_CODES_SMALL[dayWeatherTypeInt]);
-      setPicture(count, sm_weather_offset + nightWeatherTypeInt);
+      setPicture(count, sm_weather_offset + dayWeatherTypeInt);
       
       dayAndTemperatureS = dayshort+": " + std::to_string(dayMaxTempInt);
       dayAndTemperatureS += "\xB0"; // °
@@ -442,8 +441,8 @@ void updateSwitchStatus(std::string control, std::string picElement) {
         writeNxt(command);
         command = "page1." + picElement + ".pic="+ picId;
         writeNxt(command);
-        command = "vis " + text_label + ",1";
-        writeNxt(command);
+        //command = "vis " + text_label + ",1";
+        //writeNxt(command);
       }
     } else {
       SerialBT.print("Return code: ");
@@ -523,23 +522,41 @@ void doOutsideTemperature(){
 };
 
 void doInternalTemperature(){
-  double Vout = 0;
-    for (int i=0; i <= 10; i++) {
-      Vout += analogRead(ntc);
-      delay(10);
-    }
-    Vout = Vout / 10;
-    Vout = Vout * 3.3/4095.0;
-    double Rt = 10000.0 * Vout / (3.3 - Vout);
-    double T = 1/(1/298.15 + log(Rt/10000.0)/3950.0);
-    double Tc = T - 273.15;
-    double Cc = Tc / 1.42; // Tweak to get temperature correct.  It should be more or less linear, so a simple divider might do.
-    int temp = (int) Cc;
-        
-    std::string t = std::to_string(temp);
-    writeNxt("n0.val="+t);
-    //SerialBT.print("Raw temp C: ");
-    //SerialBT.println(Tc);
+  // Read the thermistor.  It's rubbish, don't use it.
+  // double Vout = 0;
+  //   for (int i=0; i <= 10; i++) {
+  //     Vout += analogRead(ntc);
+  //     delay(10);
+  //   }
+  //   Vout = Vout / 10;
+  //   Vout = Vout * 3.3/4095.0;
+  //   double Rt = 10000.0 * Vout / (3.3 - Vout);
+  //   double T = 1/(1/298.15 + log(Rt/10000.0)/3950.0);
+  //   double Tc = T - 273.15;
+  //   double Cc = Tc / 1.42; // Tweak to get temperature correct.  It should be more or less linear, so a simple divider might do.
+  //   int temp = (int) Cc;       
+  //   std::string t = std::to_string(temp);
+  //   writeNxt("n0.val="+t);
+  http.useHTTP10(true);
+  std::string url = "http://smarthome.whizzy.org:1880/get/temperature/hall";
+  http.begin(wificlient, url.c_str());
+  int returnCode = http.GET();
+  if (returnCode != 200) {
+    SerialBT.println("Failed to get internal temperature");
+    return;
+  }
+  StaticJsonDocument<48> doc;
+  DeserializationError error = deserializeJson(doc, http.getStream());
+  if (error) {
+    SerialBT.print("Internal temperature deserializeJson() failed: ");
+    SerialBT.println(error.c_str());
+    return;
+  }
+
+  float temperature = doc["temperature"]; // 20.52
+  int rounded = nearbyint(temperature); // UI only designed to support ints
+  std::string t = std::to_string(rounded);
+  writeNxt("n0.val="+t);
 };
 
 void doHWC(){

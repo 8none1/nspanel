@@ -7,7 +7,7 @@ BACKGROUND_COL="#ef9a5a"
 #mkdir -p 18x18_png
 #mkdir -p 22x22_png
 mkdir -p 46x46_png
-mkdir -p 55x55_png
+#mkdir -p 55x55_png
 mkdir -p 138x138_png
 
 for f in *.svg; do
