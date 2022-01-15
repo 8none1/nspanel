@@ -69,10 +69,10 @@ HTTPClient http;
 
 // Serial Bluetooth
 // This is quite heavy.  Might disable it once everything works.
-//BluetoothSerial SerialBT;
+BluetoothSerial SerialBT;
 
 void logger(std::string message){
-  //SerialBT.println(message.c_str());
+  SerialBT.println(message.c_str());
 }
 
 String getContentType(String filename){
@@ -133,47 +133,112 @@ void handleSerialInput(){
   while (Serial2.available()) {
     incomingData+=(char)Serial2.read();
   }
-  //logger(SerialBT.print(F("Received data from Nextion: "));
-  logger(incomingData.c_str());
-  // for (char const c: incomingData) {
-  //   SerialBT.print(c, HEX);
-  //   SerialBT.print(":");
-  // }
-  // Serial.println(F("--"));
   int strSize = incomingData.size();
-  char serialBytes[strSize+1];
-  strcpy(serialBytes, incomingData.c_str());
-  
-  byte a = 0;
+  unsigned char serialBytes[strSize+1];
+  SerialBT.print(F("Received data from Nextion: "));
+  //SerialBT.println(incomingData.c_str());
+  int p = 0;
+  for (unsigned char const c: incomingData) {
+    SerialBT.print(c, HEX);
+    SerialBT.print(":");
+     serialBytes[p] = c;
+     p+=1;
+  }
+  serialBytes[p] = '\0';
+
+  SerialBT.println(F("--"));
+  SerialBT.print("S Size: ");
+  SerialBT.println(strSize);
+    
+  //strcpy(serialBytes, incomingData.c_str());
+  //SerialBT.print("copied bytes: ");
+  //SerialBT.println(serialBytes, HEX);
+    
+  unsigned char a = 0;
   for (int i=strSize-1; i > strSize-4; i--) {
     a = serialBytes[i];
+    SerialBT.print("B:");
+    SerialBT.print(i);
+    SerialBT.print("::");
+    SerialBT.println(a, HEX);
     if (a != 255) {
+      SerialBT.println("failed sanity check");
       return;
     }
   };
 
   int page = 0;
+
   switch (serialBytes[0]) {
     case 0x66:
-      // Page change
-      page = serialBytes[1];
-      switch (page) {
-        case 1:
-          // Hot water page
+      SerialBT.println("Page load");
+      switch (serialBytes[1]) {
+        case 0x1:
+          SerialBT.println("1");
           doHWC();
-        case 3:
+          break;
+        case 0x3:
+          SerialBT.println("3");
           doDownstairsTemps();
-      };
+          break;
+        default:
+          SerialBT.println("No match in page");
+          break;
+      }
+      break;
+
     case 0x65:
       // Touch event
-      page = serialBytes[1];
-      int objectId = serialBytes[2];
-      switch (page) {
-        case 0x03:
-          // Ground floor map
-          doRoom(page, objectId);
-      };
-  };
+      SerialBT.println("Touch");
+      switch (serialBytes[1]) {
+        case 0x3:
+          SerialBT.println("Page 3 Touch");
+          SerialBT.print("Touch ID: ");
+          SerialBT.println(serialBytes[2], HEX);
+          doRoom(serialBytes[1], serialBytes[2]);
+          break;
+        default:
+          SerialBT.println("No match in touch");
+          break;
+      }
+    default:
+      SerialBT.println("No match");
+      break;
+  }
+
+  // switch (serialBytes[0]) {
+  //   case 0x66:
+  //     SerialBT.println("66");
+  //     // Page change
+  //     page = serialBytes[1];
+  //     SerialBT.print("Page: ");
+  //     SerialBT.println(page);
+  //     switch (page) {
+  //       case 1:
+  //         // Hot water page
+  //         doHWC();
+  //         //break;
+  //       case 3:
+  //         doDownstairsTemps();
+  //         //break;
+  //     };
+  //     //break;
+    
+  //   case 0x65:
+  //     SerialBT.println("65");
+  //     // Touch event
+  //     page = serialBytes[1];
+  //     int objectId = serialBytes[2];
+  //     SerialBT.print("Touch.  ");
+  //     SerialBT.print("Page: ");
+  //     SerialBT.println(page);
+  //     switch (page) {
+  //       case 0x03:
+  //         SerialBT.println("3");
+  //         // Ground floor map
+  //         doRoom(page, objectId);
+  //     };
+  // };
 }
 
 bool writeNxt(std::string data) {
@@ -228,7 +293,6 @@ void setNumber(std::string nId, int value) {
   writeNxt(nCmd);
   writeNxt("vis " + nId + ",1");
 };
-
 
 void getTemperatureFromWeb(std::string room, int textElement){
   // room is the room name for the url
@@ -618,7 +682,7 @@ void doInternalTemperature(){
 };
 
 void doHWC(){
- StaticJsonDocument<96> doc;
+  StaticJsonDocument<96> doc;
   http.useHTTP10(true);
   std::string url = "http://piwarmer.whizzy.org/get/hwc";
   std::string command = "";
@@ -650,40 +714,55 @@ void doHWC(){
 };
 
 void doRoom(int page, int roomId) {
+  writeNxt("page RoomTemp");
   std::string url = "http://smarthome.whizzy.org:1880/get/trv/";  
   std::string room;
+  SerialBT.print("Room:");
+  SerialBT.println(roomId);
   switch (page) {
     case 0x03:  
       switch (roomId) {
         case 0x0A:
           // Den
           room = "den";
+          break;
         case 0x0B:
           // Dining Rm
           room = "dining_rm";
+          break;
         case 0x0C:
           // Lounge
           room = "lounge";
+          break;          
         case 0x0D:
           // Study
           room = "study";
+          break;          
         case 0x0E:
           // Hall
           room= "hall";
+          break;          
       }
   }
-  StaticJsonDocument<768> doc;
+  StaticJsonDocument<2048> doc;
   url += room;
+  logger(url);
   http.begin(wificlient, url.c_str());
   int returnCode = http.GET();
+  SerialBT.print("Ret:");
+  SerialBT.println(returnCode);
   if (returnCode != 200) {
+    tone(21,4186,100);  
     //SerialBT.println("Fail get rm tmp"));
     return;
   };
   DeserializationError error = deserializeJson(doc, http.getStream());
   if (error) {
-    //SerialBT.print(F("Room temperature deserializeJson() failed: "));
-    //SerialBT.println(error.c_str());
+    tone(21,4186,100);  
+    delay(500);
+    tone(21,4186,100);  
+    SerialBT.print(F("Room temperature deserializeJson() failed: "));
+    SerialBT.println(error.c_str());
     return;
   }
   //const char* auto_lock = doc["auto_lock"]; // "MANUAL"
@@ -708,7 +787,6 @@ void doRoom(int page, int roomId) {
   //const char* week = doc["week"]; // "5+2"
   //const char* window_detection = doc["window_detection"]; // "OFF"
 
-  writeNxt("page RoomTemp");
   getTemperatureFromWeb(room, 6);
   setText(7, std::to_string(local_temperature));
   setText(8, std::to_string(position));
@@ -728,8 +806,8 @@ void doRoom(int page, int roomId) {
 void setup() {
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, 17,16);
-  //SerialBT.begin("nspanel");
-  //SerialBT.println(F("Booting"));
+  SerialBT.begin("nspanel");
+  SerialBT.println(F("Booting"));
   WiFi.setHostname("nextion");
   WiFi.mode(WIFI_STA);
   WiFi.begin(STASSID, STAPSK);
