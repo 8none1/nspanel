@@ -11,7 +11,7 @@
 #include <ArduinoJson.h>
 #include <NTPClient.h>
 #include "ESPNexUpload.h"
-#include <BluetoothSerial.h>
+//#include <BluetoothSerial.h>
 
 // WARNING:  If you read this code your head will explode and you will embrace the heat death of the universe as a welcome relief.
 // I have made zero attempt to make it good.  It's just cobbled together until it sort of works. 
@@ -36,7 +36,7 @@ Or I've included a hacked up version in github.  I was going to make changes to 
 Once an upload is complete you have to reboot everything for now.
 */
 
-const char* host = "nextion";
+const char* host = "nextionus";
 unsigned long previousMillis = 0;
 unsigned long hourmillis = 0;
 unsigned long minutemillis = 0;
@@ -69,10 +69,10 @@ HTTPClient http;
 
 // Serial Bluetooth
 // This is quite heavy.  Might disable it once everything works.
-BluetoothSerial SerialBT;
+//BluetoothSerial SerialBT;
 
 void logger(std::string message){
-  SerialBT.println(message.c_str());
+  //SerialBT.println(message.c_str());
 }
 
 String getContentType(String filename){
@@ -135,20 +135,20 @@ void handleSerialInput(){
   }
   int strSize = incomingData.size();
   unsigned char serialBytes[strSize+1];
-  SerialBT.print(F("Received data from Nextion: "));
+  //SerialBT.print(F("Received data from Nextion: "));
   //SerialBT.println(incomingData.c_str());
   int p = 0;
   for (unsigned char const c: incomingData) {
-    SerialBT.print(c, HEX);
-    SerialBT.print(":");
-     serialBytes[p] = c;
-     p+=1;
+    //SerialBT.print(c, HEX);
+    //SerialBT.print(":");
+    serialBytes[p] = c;
+    p+=1;
   }
   serialBytes[p] = '\0';
 
-  SerialBT.println(F("--"));
-  SerialBT.print("S Size: ");
-  SerialBT.println(strSize);
+  //SerialBT.println(F("--"));
+  //SerialBT.print("S Size: ");
+  //SerialBT.println(strSize);
     
   //strcpy(serialBytes, incomingData.c_str());
   //SerialBT.print("copied bytes: ");
@@ -157,12 +157,12 @@ void handleSerialInput(){
   unsigned char a = 0;
   for (int i=strSize-1; i > strSize-4; i--) {
     a = serialBytes[i];
-    SerialBT.print("B:");
-    SerialBT.print(i);
-    SerialBT.print("::");
-    SerialBT.println(a, HEX);
+    //SerialBT.print("B:");
+    //SerialBT.print(i);
+    //SerialBT.print("::");
+    //SerialBT.println(a, HEX);
     if (a != 255) {
-      SerialBT.println("failed sanity check");
+      //SerialBT.println("failed sanity check");
       return;
     }
   };
@@ -171,74 +171,40 @@ void handleSerialInput(){
 
   switch (serialBytes[0]) {
     case 0x66:
-      SerialBT.println("Page load");
+      //SerialBT.println("Page load");
       switch (serialBytes[1]) {
         case 0x1:
-          SerialBT.println("1");
+          //SerialBT.println("1");
           doHWC();
           break;
         case 0x3:
-          SerialBT.println("3");
+          //SerialBT.println("3");
           doDownstairsTemps();
           break;
         default:
-          SerialBT.println("No match in page");
+          //SerialBT.println("No match in page");
           break;
       }
       break;
 
     case 0x65:
       // Touch event
-      SerialBT.println("Touch");
+      //SerialBT.println("Touch");
       switch (serialBytes[1]) {
         case 0x3:
-          SerialBT.println("Page 3 Touch");
-          SerialBT.print("Touch ID: ");
-          SerialBT.println(serialBytes[2], HEX);
+          //SerialBT.println("Page 3 Touch");
+          //SerialBT.print("Touch ID: ");
+          //SerialBT.println(serialBytes[2], HEX);
           doRoom(serialBytes[1], serialBytes[2]);
           break;
         default:
-          SerialBT.println("No match in touch");
+          //SerialBT.println("No match in touch");
           break;
       }
     default:
-      SerialBT.println("No match");
+      //SerialBT.println("No match");
       break;
   }
-
-  // switch (serialBytes[0]) {
-  //   case 0x66:
-  //     SerialBT.println("66");
-  //     // Page change
-  //     page = serialBytes[1];
-  //     SerialBT.print("Page: ");
-  //     SerialBT.println(page);
-  //     switch (page) {
-  //       case 1:
-  //         // Hot water page
-  //         doHWC();
-  //         //break;
-  //       case 3:
-  //         doDownstairsTemps();
-  //         //break;
-  //     };
-  //     //break;
-    
-  //   case 0x65:
-  //     SerialBT.println("65");
-  //     // Touch event
-  //     page = serialBytes[1];
-  //     int objectId = serialBytes[2];
-  //     SerialBT.print("Touch.  ");
-  //     SerialBT.print("Page: ");
-  //     SerialBT.println(page);
-  //     switch (page) {
-  //       case 0x03:
-  //         SerialBT.println("3");
-  //         // Ground floor map
-  //         doRoom(page, objectId);
-  //     };
-  // };
 }
 
 bool writeNxt(std::string data) {
@@ -272,6 +238,10 @@ void setPicture(int pictureId, int pictureNumber) {
   picCmd += std::to_string(pictureNumber);
   writeNxt(picCmd);
   writeNxt("vis "+picId + ",1");
+  //SerialBT.print("Picture id: ");
+  //SerialBT.print(pictureId);
+  //SerialBT.print(".  Pict num: ");
+  //SerialBT.println(pictureNumber);
 }
 
 void setText(int textId, std::string text) {
@@ -325,12 +295,20 @@ void doDownstairsTemps(){
   getTemperatureFromWeb("lounge",6);
   getTemperatureFromWeb("dining_rm",5);
   getTemperatureFromWeb("den", 4);
+  getTemperatureFromWeb("old_dining_rm",9);
 };
 
 void doWeather() {
   writeNxt("page 0");
   writeNxt("vis 255,0");
   writeNxt("vis michaelfish,1");
+  // Blank all the weather extremes
+  for (int i=39; i<42; i++){
+    setPicture(i, 17);
+  }
+  for (int i=9; i<37; i++) {
+    setPicture(i,16);
+  }
   delay(1000);
 
   std::string url = "http://datapoint.metoffice.gov.uk/public/data/val/wxfcs/all/json/";
@@ -354,8 +332,20 @@ void doWeather() {
   int count = 0;
   std::string dayAndTemperatureS = "";
 
+  const int snowflake = 9;
+  const int sunglasses = 8;
+  const int windy = 11;
+  const int umbrella = 10;
+  const int sm_snowflake = 2;
+  const int sm_sunglasses = 1;
+  const int sm_windy = 4;
+  const int sm_umbrella = 3;
+  const int lg_weather_offset = 18; // The picture ID of the first large weather icon (moon)
+  const int sm_weather_offset = 49; // same for small.  This is made easier since the Met Office start their scheme at zero
+
   JsonObject SiteRep_DV = doc["SiteRep"]["DV"];
   JsonObject SiteRep_DV_Location = SiteRep_DV["Location"];
+
   
   for (JsonObject SiteRep_DV_Location_Period_item : SiteRep_DV_Location["Period"].as<JsonArray>()) {
     if (count > 7) break; // We only have 8 slots, and zero is the big picture.
@@ -389,19 +379,7 @@ void doWeather() {
     //const char* SiteRep_DV_Location_Period_item_Rep_1_FNm = SiteRep_DV_Location_Period_item_Rep_1["FNm"];
     int nightWeatherTypeInt = atoi(SiteRep_DV_Location_Period_item_Rep_1["W"]);
     const char* timePeriodNight = SiteRep_DV_Location_Period_item_Rep_1["$"];
-
-    const int snowflake = 9;
-    const int sunglasses = 8;
-    const int windy = 11;
-    const int umbrella = 10;
-    const int sm_snowflake = 2;
-    const int sm_sunglasses = 1;
-    const int sm_windy = 4;
-    const int sm_umbrella = 3;
-    const int lg_weather_offset = 18; // The picture ID of the first large weather icon (moon)
-    const int sm_weather_offset = 49; // same for small.  This is made easier since the Met Office start their scheme at zero
-
-
+    
     if (count == 0) {
       //  First time round the loop, so do the big picture first.
       doOutsideTemperature();
@@ -425,6 +403,9 @@ void doWeather() {
           pos += 1;
         }
         count=1;
+        //SerialBT.print("Pos: ");
+        //SerialBT.println(pos);
+
       } else {
         // First time round the loop, and it's still daytime, so do the 
         // big picture and then the first small as well.
@@ -451,6 +432,8 @@ void doWeather() {
         if (uvIndexDayInt > 5) {
           setPicture(pos, sunglasses);
         }
+        //SerialBT.print("Pos: ");
+        //SerialBT.println(pos);
 
         // Now the first small picture p1
         //setPicture(1, WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt]);
@@ -471,7 +454,6 @@ void doWeather() {
           setPicture(pos, sm_umbrella);
           pos += 1;
         }
-
         count=2;
       }
       delay(1000);
@@ -502,7 +484,8 @@ void doWeather() {
         setPicture(pos, sm_sunglasses);
         pos += 1;
       }
-      
+      //SerialBT.print("Pos: ");
+      //SerialBT.println(pos);
       pos = count * 4 + 9;
       count +=1;
       if (count > 7) break;
@@ -525,7 +508,8 @@ void doWeather() {
         setPicture(pos, sm_umbrella);
         pos += 1;
       }
-
+      //SerialBT.print("Pos: ");
+      //SerialBT.println(pos);
       delay(1000);
       count+=1;
     }
@@ -717,8 +701,8 @@ void doRoom(int page, int roomId) {
   writeNxt("page RoomTemp");
   std::string url = "http://smarthome.whizzy.org:1880/get/trv/";  
   std::string room;
-  SerialBT.print("Room:");
-  SerialBT.println(roomId);
+  //SerialBT.print("Room:");
+  //SerialBT.println(roomId);
   switch (page) {
     case 0x03:  
       switch (roomId) {
@@ -749,11 +733,11 @@ void doRoom(int page, int roomId) {
   logger(url);
   http.begin(wificlient, url.c_str());
   int returnCode = http.GET();
-  SerialBT.print("Ret:");
-  SerialBT.println(returnCode);
+  //SerialBT.print("Ret:");
+  //SerialBT.println(returnCode);
   if (returnCode != 200) {
     tone(21,4186,100);  
-    //SerialBT.println("Fail get rm tmp"));
+    //SerialBT.println("Fail get rm tmp");
     return;
   };
   DeserializationError error = deserializeJson(doc, http.getStream());
@@ -761,8 +745,8 @@ void doRoom(int page, int roomId) {
     tone(21,4186,100);  
     delay(500);
     tone(21,4186,100);  
-    SerialBT.print(F("Room temperature deserializeJson() failed: "));
-    SerialBT.println(error.c_str());
+    //SerialBT.print(F("Room temperature deserializeJson() failed: "));
+    //SerialBT.println(error.c_str());
     return;
   }
   //const char* auto_lock = doc["auto_lock"]; // "MANUAL"
@@ -806,9 +790,15 @@ void doRoom(int page, int roomId) {
 void setup() {
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, 17,16);
-  SerialBT.begin("nspanel");
-  SerialBT.println(F("Booting"));
-  WiFi.setHostname("nextion");
+
+  uint8_t baseMac[6];
+  esp_read_mac(baseMac, ESP_MAC_WIFI_STA);
+  char macChar[4] = {0};
+  sprintf(macChar, "%02X%02X", baseMac[4], baseMac[5]);
+  std::string hostname = "nextion_";
+  hostname.append(macChar);
+  
+  WiFi.setHostname(hostname.c_str());
   WiFi.mode(WIFI_STA);
   WiFi.begin(STASSID, STAPSK);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -816,6 +806,9 @@ void setup() {
     delay(5000);
     ESP.restart();
   }
+
+  //SerialBT.begin(hostname.c_str());
+  //SerialBT.println(F("Booting"));
 
   ArduinoOTA
     .onStart([]() {
@@ -870,7 +863,7 @@ void setup() {
        return;
   } 
 
-  MDNS.begin(host);
+  MDNS.begin(hostname.c_str());
   //SerialBT.print(F("http://"));
   //SerialBT.print(host);
   //SerialBT.println(F(".local"));
@@ -896,6 +889,21 @@ void setup() {
     server.send(200, F("text/plain"), "Rebooting...");
     delay(2000);
     ESP.restart();
+  });
+
+  server.on("/weather", HTTP_POST, [](){
+  server.send(200, F("text/plain"), "Doing weather");
+  doWeather();
+  });
+
+  server.on("/alarm/on", HTTP_POST, [](){
+    server.send(200, F("text/pain"), "Switching to alarm");
+    writeNxt("page alarm");
+  });
+
+  server.on("/alarm/off", HTTP_POST, [](){
+    server.send(200, F("text/pain"), "Switching to main screen");
+    writeNxt("page page0");
   });
 
   // called when the url is not defined here
