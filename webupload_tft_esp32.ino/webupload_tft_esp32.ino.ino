@@ -11,6 +11,8 @@
 #include <ArduinoJson.h>
 #include <NTPClient.h>
 #include "ESPNexUpload.h"
+
+// XXX
 //#include <BluetoothSerial.h>
 
 // WARNING:  If you read this code your head will explode and you will embrace the heat death of the universe as a welcome relief.
@@ -36,7 +38,7 @@ Or I've included a hacked up version in github.  I was going to make changes to 
 Once an upload is complete you have to reboot everything for now.
 */
 
-const char* host = "nextionus";
+const char* host = "nextion";
 unsigned long previousMillis = 0;
 unsigned long hourmillis = 0;
 unsigned long minutemillis = 0;
@@ -69,9 +71,11 @@ HTTPClient http;
 
 // Serial Bluetooth
 // This is quite heavy.  Might disable it once everything works.
+// XXX
 //BluetoothSerial SerialBT;
 
 void logger(std::string message){
+  // XXX
   //SerialBT.println(message.c_str());
 }
 
@@ -273,14 +277,16 @@ void getTemperatureFromWeb(std::string room, int textElement){
   http.begin(wificlient, room.c_str());
   int returnCode = http.GET();
   if (returnCode != 200) {
-    //SerialBT.println("Fail get rm tmp");
+    // XXX
+    ///SerialBT.println("Fail get rm tmp");
     return;
   }
   StaticJsonDocument<48> doc;
   DeserializationError error = deserializeJson(doc, http.getStream());
   if (error) {
-    //SerialBT.print("Rm tmp deser failed: ");
-    //SerialBT.println(error.c_str());
+    // XXX
+    ///SerialBT.print("Rm tmp deser failed: ");
+    ///SerialBT.println(error.c_str());
     return;
   }
   float temperature = doc["temperature"]; // 20.52
@@ -299,6 +305,7 @@ void doDownstairsTemps(){
 };
 
 void doWeather() {
+  logger("doWeather");
   writeNxt("page 0");
   writeNxt("vis 255,0");
   writeNxt("vis michaelfish,1");
@@ -324,6 +331,7 @@ void doWeather() {
   http.end();
   
   if (error) {
+    // XXX
     //SerialBT.print("deserializeJson() failed: ");
     //SerialBT.println(error.c_str());
     return;
@@ -403,8 +411,9 @@ void doWeather() {
           pos += 1;
         }
         count=1;
-        //SerialBT.print("Pos: ");
-        //SerialBT.println(pos);
+        // XXX
+        ///SerialBT.print("Pos: ");
+        ///SerialBT.println(pos);
 
       } else {
         // First time round the loop, and it's still daytime, so do the 
@@ -432,6 +441,7 @@ void doWeather() {
         if (uvIndexDayInt > 5) {
           setPicture(pos, sunglasses);
         }
+        // XXX
         //SerialBT.print("Pos: ");
         //SerialBT.println(pos);
 
@@ -539,7 +549,8 @@ void updateSwitchStatus(std::string control, std::string picElement) {
     };
     DeserializationError error = deserializeJson(doc, http.getStream());
     if (error) {
-      //SerialBT.print("Deserialisation Err: ");
+      // XXX
+      ///SerialBT.print("Deserialisation Err: ");
       //SerialBT.println(error.c_str());
       return;
     };
@@ -601,6 +612,7 @@ void doOutsideTemperature(){
   if (returnCode == 200) {
     DeserializationError error = deserializeJson(doc, http.getStream());
     if (error) {
+      // XXX
       //SerialBT.print("Outside temp deserialisation Err: ");
       //SerialBT.println(error.c_str());
       return;
@@ -648,12 +660,14 @@ void doInternalTemperature(){
   http.begin(wificlient, url.c_str());
   int returnCode = http.GET();
   if (returnCode != 200) {
+    // XXX
     //SerialBT.println("Failed to get internal temperature");
     return;
   }
   StaticJsonDocument<48> doc;
   DeserializationError error = deserializeJson(doc, http.getStream());
   if (error) {
+    // XXX
     //SerialBT.print("Internal temperature deserializeJson() failed: ");
     //SerialBT.println(error.c_str());
     return;
@@ -807,7 +821,8 @@ void setup() {
     ESP.restart();
   }
 
-  //SerialBT.begin(hostname.c_str());
+  // XXX
+  ///SerialBT.begin(hostname.c_str());
   //SerialBT.println(F("Booting"));
 
   ArduinoOTA
@@ -823,9 +838,11 @@ void setup() {
       Serial.println("Start updating " + type);
     })
     .onEnd([]() {
+      // XXX
       //SerialBT.println("\nEnd");
     })
     .onProgress([](unsigned int progress, unsigned int total) {
+      // XXX
       //SerialBT.printf("Progress: %u%%\r", (progress / (total / 100)));
     });
     // .onError([](ota_error_t error) {
@@ -839,7 +856,8 @@ void setup() {
 
   ArduinoOTA.begin();
 
-  //SerialBT.println("Ready");
+  // XXX
+  ///SerialBT.println("Ready");
   //SerialBT.print("IP address: ");
   //SerialBT.println(WiFi.localIP());
 
