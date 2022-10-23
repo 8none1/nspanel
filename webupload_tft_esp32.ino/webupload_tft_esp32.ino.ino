@@ -11,9 +11,7 @@
 #include <ArduinoJson.h>
 #include <NTPClient.h>
 #include "ESPNexUpload.h"
-
-// XXX
-//#include <BluetoothSerial.h>
+#include <BluetoothSerial.h>
 
 // WARNING:  If you read this code your head will explode and you will embrace the heat death of the universe as a welcome relief.
 // I have made zero attempt to make it good.  It's just cobbled together until it sort of works. 
@@ -69,15 +67,35 @@ NTPClient timeClient(ntpUDP, "time"); //, utcOffsetInSeconds);
 WiFiClient wificlient;
 HTTPClient http;
 
-// Serial Bluetooth
-// This is quite heavy.  Might disable it once everything works.
-// XXX
-//BluetoothSerial SerialBT;
+BluetoothSerial SerialBT;
 
 void logger(std::string message){
-  // XXX
+  if (SerialBT.hasClient()){
+    SerialBT.println(message.c_str());
+  }
   //SerialBT.println(message.c_str());
+  Serial.println(message.c_str());
 }
+
+void logger(String message){
+  SerialBT.println(message);
+  Serial.println(message);
+}
+
+void logger(const char* message){
+  SerialBT.println(message);
+  Serial.println(message);
+}
+
+void beep(int loopcount) {
+  for (int i = 0; i < loopcount; i++) {
+    tone(25, 3000, 100);
+    delay(100);
+    tone(21,4186,100);  
+    delay(100);
+  }
+  delay(1000);
+};
 
 String getContentType(String filename){
   if(server.hasArg(F("download"))) return F("application/octet-stream");
@@ -99,6 +117,7 @@ bool handleFileRead(String path) {                          // send the right fi
     file.close();                                           // Close the file again
     return true;
   }
+  logger("Something went wrong with the file read");
   return false;
 }
 
@@ -120,7 +139,7 @@ bool handleFileUpload(){
   }
 
   if(upload.status == UPLOAD_FILE_START){
-    logger("Update Nextion");
+    logger(std::string("Update Nextion"));
     result = nextion.prepareUpload(fileSize);
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     nextion.upload(upload.buf, upload.currentSize);  
@@ -277,16 +296,14 @@ void getTemperatureFromWeb(std::string room, int textElement){
   http.begin(wificlient, room.c_str());
   int returnCode = http.GET();
   if (returnCode != 200) {
-    // XXX
-    ///SerialBT.println("Fail get rm tmp");
+    logger(std::string ("Fail get rm tmp"));
     return;
   }
   StaticJsonDocument<48> doc;
   DeserializationError error = deserializeJson(doc, http.getStream());
   if (error) {
-    // XXX
-    ///SerialBT.print("Rm tmp deser failed: ");
-    ///SerialBT.println(error.c_str());
+    logger("Rm tmp descr failed: ");
+    logger(error.c_str());
     return;
   }
   float temperature = doc["temperature"]; // 20.52
@@ -332,8 +349,10 @@ void doWeather() {
   
   if (error) {
     // XXX
-    //SerialBT.print("deserializeJson() failed: ");
+    //SerialBT.print("weather deserializeJson() failed: ");
     //SerialBT.println(error.c_str());
+    logger("weather deserializeJson() failed: ");
+    logger(error.c_str());
     return;
   };
 
@@ -444,6 +463,8 @@ void doWeather() {
         // XXX
         //SerialBT.print("Pos: ");
         //SerialBT.println(pos);
+        logger("Pos: ");
+        logger(String(pos).c_str());
 
         // Now the first small picture p1
         //setPicture(1, WEATHER_CODES_SMALL_NIGHT[nightWeatherTypeInt]);
@@ -494,8 +515,8 @@ void doWeather() {
         setPicture(pos, sm_sunglasses);
         pos += 1;
       }
-      //SerialBT.print("Pos: ");
-      //SerialBT.println(pos);
+      logger("Pos: ");
+      logger(String(pos));
       pos = count * 4 + 9;
       count +=1;
       if (count > 7) break;
@@ -549,9 +570,8 @@ void updateSwitchStatus(std::string control, std::string picElement) {
     };
     DeserializationError error = deserializeJson(doc, http.getStream());
     if (error) {
-      // XXX
-      ///SerialBT.print("Deserialisation Err: ");
-      //SerialBT.println(error.c_str());
+      logger("Deserialisation Err: ");
+      logger(error.c_str());
       return;
     };
     bool state = doc["state"];
@@ -756,10 +776,7 @@ void doRoom(int page, int roomId) {
   };
   DeserializationError error = deserializeJson(doc, http.getStream());
   if (error) {
-    tone(21,4186,100);  
-    delay(500);
-    tone(21,4186,100);  
-    //SerialBT.print(F("Room temperature deserializeJson() failed: "));
+    logger("Room temp deserialisation Err");
     //SerialBT.println(error.c_str());
     return;
   }
@@ -803,6 +820,8 @@ void doRoom(int page, int roomId) {
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("Serial port online, pausing 5 seconds");
+  delay(5000);
   Serial2.begin(115200, SERIAL_8N1, 17,16);
 
   uint8_t baseMac[6];
@@ -811,19 +830,27 @@ void setup() {
   sprintf(macChar, "%02X%02X", baseMac[4], baseMac[5]);
   std::string hostname = "nextion_";
   hostname.append(macChar);
-  
+
+  if (!SerialBT.begin(hostname.c_str())) {
+    beep(2);
+    logger("An error occurred initializing Bluetooth");
+  };
+
+    
   WiFi.setHostname(hostname.c_str());
   WiFi.mode(WIFI_STA);
   WiFi.begin(STASSID, STAPSK);
   while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    //SerialBT.println(F("Connection Failed! Rebooting..."));
-    delay(5000);
-    ESP.restart();
+    beep(1);
+    logger("Waiting for Wifi");
+    delay(1000);
   }
-
-  // XXX
-  ///SerialBT.begin(hostname.c_str());
-  //SerialBT.println(F("Booting"));
+  
+  logger("Hostname:");
+  logger(hostname.c_str());
+  logger("IP address: ");
+  logger(WiFi.localIP().toString().c_str());
+  logger("WiFi connected, starting...");
 
   ArduinoOTA
     .onStart([]() {
@@ -838,12 +865,10 @@ void setup() {
       Serial.println("Start updating " + type);
     })
     .onEnd([]() {
-      // XXX
-      //SerialBT.println("\nEnd");
+      logger("OTA update end");
     })
     .onProgress([](unsigned int progress, unsigned int total) {
-      // XXX
-      //SerialBT.printf("Progress: %u%%\r", (progress / (total / 100)));
+      logger(String(progress / (total / 100)) + "%");
     });
     // .onError([](ota_error_t error) {
     //   SerialBT.printf("Error[%u]: ", error);
@@ -853,13 +878,9 @@ void setup() {
     //   else if (error == OTA_RECEIVE_ERROR) SerialBT.println("Receive Failed");
     //   else if (error == OTA_END_ERROR) SerialBT.println("End Failed");
     // });
-
+  ArduinoOTA.setHostname(hostname.c_str());
   ArduinoOTA.begin();
-
-  // XXX
-  ///SerialBT.println("Ready");
-  //SerialBT.print("IP address: ");
-  //SerialBT.println(WiFi.localIP());
+  logger("OTA client ready");
 
   // NS Panel Specifics
   ESP32PWM::allocateTimer(0);
@@ -876,20 +897,22 @@ void setup() {
   analogSetClockDiv(255);
 
   if(!SPIFFS.begin()){
-       //SerialBT.println(F("An Error has occurred while mounting SPIFFS"));
-       //SerialBT.println(F("Did you upload the data directory that came with this?"));
-       return;
-  } 
+       logger("An Error has occurred while mounting SPIFFS");
+       logger("Did you upload the data directory that came with this?");
+       beep(4);
+       //return;
+  } else {
+    logger("SPIFFS mounted");
+  }
 
   MDNS.begin(hostname.c_str());
-  //SerialBT.print(F("http://"));
-  //SerialBT.print(host);
-  //SerialBT.println(F(".local"));
-
+  MDNS.addService("http", "tcp", 80);
+  logger ("mDNS responder started");
+  
   //SERVER INIT
   server.on("/", HTTP_POST, [](){ 
-    //SerialBT.println(F("Successfully updated Nextion!\n"));
-    // Redirect the client to the success page after handeling the file upload
+    logger("Successfully updated Nextion!\n");
+    // Redirect the client to the success page after handling the file upload
     server.sendHeader(F("Location"),F("/success.html"));
     server.send(303);
     doWeather();
@@ -932,15 +955,13 @@ void setup() {
   });
 
   server.begin();
-  //SerialBT.println(F("\nHTTP server started"));    
+  logger("HTTP server started");
 
   // NTP
   timeClient.begin();
-  timeClient.update();
-  while (!timeClient.isTimeSet()) {
-    tone(21,4186,100);
-    delay(1000);
-  };
+  timeClient.forceUpdate();
+  logger("NTP client started.  Time");
+  logger(timeClient.getFormattedTime().c_str());
   writeNxt("page 0");
   writeNxt("vis michaelfish,0");
   doInternalTemperature();
@@ -949,7 +970,6 @@ void setup() {
 
 void loop() {
   ArduinoOTA.handle();
-  timeClient.update();  // Has it's own rate limiter, so call with abandon
   server.handleClient();
   if (Serial2.available()) {
     handleSerialInput();
@@ -983,12 +1003,15 @@ void loop() {
     minutemillis = millis();
     //doOutsideTemperature();
     //doInternalTemperature();
+    String formattedDate = timeClient.getFormattedTime();
+    logger(formattedDate);
   }
 
   if (currentMillis - hourmillis >= 3600000){
     // Every hour
     hourmillis = millis();
     doWeather();
+    timeClient.update();
   };
 
   doButtonPress();
